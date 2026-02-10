@@ -28,7 +28,7 @@ class UserRepository:
         username: str,
         full_name: str | None,
         email: str | None,
-        is_admin: bool = False,
+        is_admin: bool | None = None,
     ) -> AppUser:
         existing = self.get_by_peeringdb_user_id(peeringdb_user_id)
         if existing is None:
@@ -37,14 +37,15 @@ class UserRepository:
                 username=username,
                 full_name=full_name,
                 email=email,
-                is_admin=is_admin,
+                is_admin=bool(is_admin),
             )
             self._session.add(existing)
         else:
             existing.username = username
             existing.full_name = full_name
             existing.email = email
-            existing.is_admin = is_admin
+            if is_admin is not None:
+                existing.is_admin = is_admin
 
         self._session.flush()
         return existing

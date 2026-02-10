@@ -258,6 +258,55 @@ In progress
 
 Next
 1. Align `PRD.md`, `APP_FLOW.md`, and `BACKEND_STRUCTURE.md` with the new route-server Option A scope before implementation begins.
+
+---
+
+Update: 2026-02-10 (Phase 4 request workflow complete)
+
+Completed
+1. Implemented Phase 4 Step 4.1 request APIs with ownership and duplicate protections:
+   - Added `POST /api/v1/requests`, `GET /api/v1/requests`, `GET /api/v1/requests/{request_id}`.
+   - Enforced ASN ownership via `user_asn` mappings and deterministic duplicate conflict responses.
+   - Added target-network validation for active `zt_network` IDs before request creation.
+2. Implemented Phase 4 Step 4.2 operator workflow pages:
+   - Added `/dashboard` and `/requests/{request_id}` routes.
+   - Expanded `/onboarding` payload to include eligible ASNs and active ZeroTier networks.
+3. Implemented Phase 4 Step 4.3 admin queue/detail and decision APIs:
+   - Added `/admin/requests` and `/admin/requests/{request_id}`.
+   - Added `POST /api/v1/admin/requests/{request_id}/approve`.
+   - Added `POST /api/v1/admin/requests/{request_id}/reject` with reject-reason validation.
+   - Added `POST /api/v1/admin/requests/{request_id}/retry` with strict `failed -> approved` guard.
+   - Added role-based session guards for operator/admin access checks.
+4. Implemented Phase 4 Step 4.4 audit emission for workflow transitions:
+   - Added `request.created` and `request.status.changed` audit writes with actor/status metadata.
+5. Implemented Phase 4 Step 4.5 workflow integration tests:
+   - Added `tests/workflow/test_request_workflow_integration.py`.
+   - Added workflow test fixtures in `tests/workflow/conftest.py`.
+   - Covered create/duplicate/ownership errors, operator visibility guards, admin approve/reject/retry transitions, and admin authorization failures.
+6. Added supporting repository and session updates:
+   - Added `app/repositories/zt_networks.py`.
+   - Added admin queue filters in `JoinRequestRepository.list_for_admin`.
+   - Updated user upsert behavior to preserve existing admin flags during OAuth login.
+
+Verification
+1. `uv run ruff check .` passed.
+2. `uv run mypy .` passed.
+3. `uv run pytest tests/workflow -q` passed.
+4. `uv run pytest -q` passed.
+
+In progress
+1. No active implementation tasks.
+
+Next
+1. Start Phase 5 Step 5.1-5.4 provider abstraction/adapters and worker provider selection.
+2. Replace Phase 4 provisioning enqueue placeholder with actual Celery task dispatch in Phase 5.
+3. Add provisioning contract tests under `tests/provisioning`.
+
+Known bugs / regressions
+1. None identified in current Phase 4 scope.
+
+Notes
+1. Integration coverage added for Phase 4 API/page workflow paths using in-memory SQLite + OAuth stubbed login flow.
 2. Define environment/config contract for route-server SSH fanout (inventory, auth, command policy).
 3. Start Phase 3 auth implementation once scope docs are aligned.
 

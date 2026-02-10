@@ -164,7 +164,7 @@ async def auth_callback(
         username=profile.username,
         full_name=profile.full_name,
         email=profile.email,
-        is_admin=False,
+        is_admin=None,
     )
 
     asn_rows = user_asn_repo.replace_for_user(

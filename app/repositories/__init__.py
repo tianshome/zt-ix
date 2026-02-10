@@ -15,6 +15,7 @@ from app.repositories.oauth_state_nonces import (
 )
 from app.repositories.user_asns import UserAsnRecord, UserAsnRepository
 from app.repositories.users import UserRepository
+from app.repositories.zt_networks import ZtNetworkRepository
 
 __all__ = [
     "AuditEventRepository",
@@ -29,4 +30,5 @@ __all__ = [
     "UserAsnRepository",
     "UserRepository",
     "ZtMembershipRepository",
+    "ZtNetworkRepository",
 ]

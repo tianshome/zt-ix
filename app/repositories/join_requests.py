@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -25,6 +25,29 @@ class JoinRequestRepository:
         statement = select(JoinRequest).where(JoinRequest.user_id == user_id).order_by(
             JoinRequest.requested_at.desc()
         )
+        return list(self._session.execute(statement).scalars())
+
+    def list_for_admin(
+        self,
+        *,
+        status: RequestStatus | None = None,
+        asn: int | None = None,
+        zt_network_id: str | None = None,
+        min_age_minutes: int | None = None,
+    ) -> list[JoinRequest]:
+        statement = select(JoinRequest)
+
+        if status is not None:
+            statement = statement.where(JoinRequest.status == status)
+        if asn is not None:
+            statement = statement.where(JoinRequest.asn == asn)
+        if zt_network_id is not None:
+            statement = statement.where(JoinRequest.zt_network_id == zt_network_id)
+        if min_age_minutes is not None:
+            cutoff = datetime.now(UTC) - timedelta(minutes=min_age_minutes)
+            statement = statement.where(JoinRequest.requested_at <= cutoff)
+
+        statement = statement.order_by(JoinRequest.requested_at.desc())
         return list(self._session.execute(statement).scalars())
 
     def get_active_for_asn_network(self, asn: int, zt_network_id: str) -> JoinRequest | None:

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import uuid
+
 from fastapi import FastAPI, HTTPException, Request
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import AppSettings, get_settings
 from app.db.session import SessionLocal
 from app.integrations.peeringdb import PeeringDBClient
+from app.repositories.user_asns import UserAsnRepository
+from app.repositories.zt_networks import ZtNetworkRepository
 from app.routes.auth import router as auth_router
+from app.routes.workflow import router as workflow_router
 
 ERROR_MESSAGES: dict[str, str] = {
     "oauth_error": "Login was canceled or rejected by PeeringDB.",
@@ -36,6 +41,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     )
 
     app.include_router(auth_router)
+    app.include_router(workflow_router)
 
     @app.get("/", tags=["system"], name="root")
     async def root() -> dict[str, str]:
@@ -46,11 +52,32 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/onboarding", tags=["operator"], name="onboarding_page")
-    async def onboarding(request: Request) -> dict[str, str]:
+    async def onboarding(request: Request) -> dict[str, object]:
         user_id = request.session.get("user_id")
         if not isinstance(user_id, str):
             raise HTTPException(status_code=401, detail="authentication required")
-        return {"status": "ready", "user_id": user_id}
+
+        try:
+            user_uuid = uuid.UUID(user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=401, detail="invalid session user") from exc
+
+        with app.state.session_maker() as session:
+            asn_rows = UserAsnRepository(session).list_by_user_id(user_uuid)
+            network_rows = ZtNetworkRepository(session).list_active()
+
+        return {
+            "status": "ready",
+            "user_id": user_id,
+            "eligible_asns": [
+                {"asn": row.asn, "net_id": row.net_id, "net_name": row.net_name}
+                for row in asn_rows
+            ],
+            "zt_networks": [
+                {"id": row.id, "name": row.name, "description": row.description}
+                for row in network_rows
+            ],
+        }
 
     @app.get("/error", tags=["system"], name="error_page")
     async def error_page(code: str = "unknown", detail: str | None = None) -> dict[str, str | None]:
