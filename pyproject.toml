@@ -1,0 +1,7 @@
+[project]
+name = "zt-ix"
+version = "0.1.0"
+description = "Controller for setting up ZeroTier for a full-mesh virtual internet exchange."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
