@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import Connection
 
 from alembic import context
+from app.db import models as _models  # noqa: F401
+from app.db.base import Base
 
 config = context.config
 
 if config.config_file_name:
     fileConfig(config.config_file_name)
 
-target_metadata = None
+database_url = os.getenv("DATABASE_URL")
+if database_url:
+    config.set_main_option("sqlalchemy.url", database_url)
+
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
@@ -22,6 +29,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         compare_type=True,
+        compare_server_default=True,
     )
 
     with context.begin_transaction():
@@ -43,7 +51,12 @@ def run_migrations_online() -> None:
 
 
 def _configure_context(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+        compare_server_default=True,
+    )
 
 
 if context.is_offline_mode():

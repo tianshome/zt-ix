@@ -14,6 +14,8 @@ This repository is built to be worked on with AI agents _without_ devolving into
    - You may not introduce libraries, frameworks, patterns, or versions not explicitly allowed by TECH_STACK.md.
 5. **Progress must persist.**
    - Update `progress.txt` after every meaningful change so the next session does not restart from zero context.
+6. **Use consistent approved command prefixes.**
+   - In environments with prefix-based escalation approvals, formulate commands so executable prefixes stay consistent (for example, `docker compose ...`, `uv run ...`) to minimize repeated approval prompts.
 
 ## 1) Required documents (read in this order)
 

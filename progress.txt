@@ -154,3 +154,82 @@ Next
 
 Known bugs / regressions
 1. None identified for this documentation-only update.
+
+---
+
+Update: 2026-02-10 (Phase 2 data and migration foundation complete)
+
+Completed
+1. Implemented Phase 2 Step 2.1 SQLAlchemy data model layer per `BACKEND_STRUCTURE.md`:
+   - Added DB base/metadata conventions and status enums.
+   - Added ORM models for `app_user`, `user_asn`, `zt_network`, `join_request`, `zt_membership`, `oauth_state_nonce`, and `audit_event`.
+   - Added DB session helpers.
+2. Implemented Phase 2 Step 2.2 initial Alembic migration:
+   - Wired Alembic to SQLAlchemy metadata.
+   - Added initial revision creating enum, tables, indexes, and active-request partial unique index.
+3. Implemented Phase 2 Step 2.3 repository layer:
+   - Added repositories for users, user ASN mappings, join requests, memberships, and audit events.
+   - Added repository error types for duplicate active request and invalid state transition.
+4. Implemented Phase 2 Step 2.4 DB invariant tests:
+   - Added DB fixtures and tests covering:
+     - one active request per (`asn`, `zt_network_id`)
+     - allowed/forbidden request status transitions
+
+Verification
+1. `uv run ruff check .` passed.
+2. `uv run mypy .` passed.
+3. `uv run pytest tests/db -q` passed.
+4. `uv run pytest -q` passed.
+5. Migration lifecycle verified with `uv run env DATABASE_URL=sqlite:////tmp/zt_ix_phase2.db alembic upgrade/downgrade/upgrade`.
+
+In progress
+1. No active implementation tasks.
+
+Next
+1. Start Phase 3 Step 3.1: `/auth/login` state/nonce/PKCE generation.
+2. Start Phase 3 Step 3.2: `/auth/callback` state validation and token exchange path.
+3. Add auth integration tests for success/failure callback branches.
+
+Known bugs / regressions
+1. `alembic upgrade head` against local PostgreSQL could not be validated in this session because PostgreSQL on `localhost:5432` was unavailable.
+
+---
+
+Update: 2026-02-10 (Phase 2 PostgreSQL verification gap closed)
+
+Completed
+1. Added concrete local dependency orchestration for documented infrastructure profile:
+   - Added `docker-compose.yml` with pinned images for PostgreSQL `16.6` and Redis `7.4.1`.
+   - Set PostgreSQL host mapping default to `5433` (`${POSTGRES_HOST_PORT:-5433}:5432`) to avoid local `5432` conflicts.
+2. Aligned local default DB connection settings to host port `5433`:
+   - `.env.example`
+   - `app/db/session.py`
+   - `alembic.ini`
+3. Added README run instructions for starting local dependencies and documented the `5433` host-port expectation.
+4. Fixed a PostgreSQL migration defect in `alembic/versions/20260210_0001_phase2_data_foundation.py`:
+   - Removed redundant explicit enum creation causing duplicate `request_status` type creation during `upgrade`.
+5. Completed previously blocked PostgreSQL migration verification using alternate host port override in this environment:
+   - Ran upgrade/downgrade/upgrade successfully against running local PostgreSQL.
+
+Verification
+1. `docker compose ps` (PostgreSQL and Redis healthy).
+2. `uv run env DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55433/zt_ix alembic upgrade head && uv run env DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55433/zt_ix alembic downgrade base && uv run env DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55433/zt_ix alembic upgrade head` passed.
+3. `uv run ruff check .` passed.
+4. `uv run mypy .` passed.
+5. `uv run pytest tests/db -q` passed.
+6. `uv run pytest -q` passed.
+
+In progress
+1. No active implementation tasks.
+
+Next
+1. Start Phase 3 Step 3.1: `/auth/login` state/nonce/PKCE generation.
+2. Start Phase 3 Step 3.2: `/auth/callback` state validation and token exchange path.
+3. Add auth integration tests for success/failure callback branches.
+
+Known bugs / regressions
+1. None identified in Phase 2 scope after PostgreSQL verification.
+
+Notes
+1. In this environment, host port `5433` was already allocated; verification used `POSTGRES_HOST_PORT=55433` while keeping repo defaults at `5433`.
+2. Added an AGENTS.md non-negotiable to keep escalation-sensitive commands on consistent prefixes (for example, `docker compose`, `uv run`) to reduce repeated approvals.

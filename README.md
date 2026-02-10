@@ -20,6 +20,13 @@ This repository uses the following for day-to-day development:
 uv sync --dev
 ```
 
+### Start local dependencies
+```bash
+docker compose up -d postgres redis
+```
+
+PostgreSQL is exposed on host port `5433` to avoid conflicts with existing services on `5432`.
+
 ### Start the API
 ```bash
 uv run uvicorn app.main:app --reload
