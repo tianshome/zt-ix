@@ -1,5 +1,5 @@
 # Backend Structure
-Version: 0.2
+Version: 0.3
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
@@ -11,14 +11,20 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
 4. External systems:
    - PeeringDB OAuth endpoints and PeeringDB REST API.
    - ZeroTier provisioning provider (`central` or `self_hosted_controller`).
+5. Authentication modes:
+   - Auth Option A: local credentials stored in DB (`local_credential`) with `app_user` as canonical user profile.
+   - Auth Option B: PeeringDB OAuth identities mapped onto canonical `app_user`.
 
 ## 2. Core Domain Invariants
-1. A user is uniquely identified by `peeringdb_user_id`.
-2. A user can only create requests for ASNs currently linked to that user from PeeringDB.
-3. Only one active request exists per (`asn`, `zt_network_id`) across statuses:
+1. Canonical application user identity is `app_user.id` (UUID).
+2. `app_user.peeringdb_user_id` is unique when present and nullable for local-only users.
+3. Local credential usernames are unique after normalization (lowercase and trimmed).
+4. A user can only create requests for ASNs currently linked to that user from either PeeringDB sync or local assignment.
+5. If user-level associated-network rows exist, request target network must be within that association set.
+6. Only one active request exists per (`asn`, `zt_network_id`) across statuses:
    - `pending`, `approved`, `provisioning`, `active`
-4. Request state transitions must follow `APP_FLOW.md`.
-5. `zt_membership` is one-to-one with `join_request` and unique per (`zt_network_id`, `node_id`).
+7. Request state transitions must follow `APP_FLOW.md`.
+8. `zt_membership` is one-to-one with `join_request` and unique per (`zt_network_id`, `node_id`).
 
 ## 3. Database Schema (PostgreSQL)
 ```sql
@@ -26,13 +32,25 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE app_user (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  peeringdb_user_id BIGINT NOT NULL UNIQUE,
+  peeringdb_user_id BIGINT UNIQUE,
   username TEXT NOT NULL,
   full_name TEXT,
   email TEXT,
   is_admin BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE local_credential (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL UNIQUE REFERENCES app_user(id) ON DELETE CASCADE,
+  login_username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  last_login_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (login_username = lower(login_username))
 );
 
 CREATE TABLE user_asn (
@@ -54,6 +72,15 @@ CREATE TABLE zt_network (
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE user_network_access (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  zt_network_id TEXT NOT NULL REFERENCES zt_network(id) ON DELETE CASCADE,
+  source TEXT NOT NULL DEFAULT 'local',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, zt_network_id)
 );
 
 CREATE TYPE request_status AS ENUM (
@@ -121,18 +148,27 @@ CREATE UNIQUE INDEX uq_join_request_active_per_asn_network
   ON join_request(asn, zt_network_id)
   WHERE status IN ('pending', 'approved', 'provisioning', 'active');
 CREATE INDEX idx_audit_event_created_at ON audit_event(created_at);
+CREATE INDEX idx_local_credential_user_id ON local_credential(user_id);
+CREATE INDEX idx_user_network_access_user_id ON user_network_access(user_id);
 ```
 
 ## 4. Authentication and Session Contract
-1. `/auth/login` starts OAuth authorization with `state`, `nonce`, and PKCE verifier.
-2. `/auth/callback` validates `state`, exchanges code for token set, and consumes one-time state row.
-3. Identity and ASN authorization context are loaded from PeeringDB profile/API calls before request creation is allowed.
-4. Local session cookie requirements:
+1. Auth Option B (`/auth/login`, `/auth/callback`) starts OAuth authorization with `state`, `nonce`, and PKCE verifier.
+2. OAuth callback validates `state`, exchanges code for token set, and consumes one-time state row.
+3. Auth Option A (`/auth/local/login`) verifies username/password against `local_credential.password_hash`.
+4. Identity and ASN/network authorization context are loaded from:
+   - PeeringDB profile/API for OAuth users.
+   - persisted local assignments for local-credential users.
+5. Local session cookie requirements:
    - HTTP-only
    - Secure in production
    - SameSite=Lax
-5. Replay protection:
+6. Replay protection:
    - Callback with used or expired `state` is rejected and audited.
+7. Local credential verification requirements:
+   - passwords stored as salted hashes only
+   - constant-time comparison for verification path
+   - disabled credentials cannot establish sessions
 
 ## 5. ZeroTier Provisioning Provider Contract
 1. Workflow code depends on provider interface, not provider-specific endpoints.
@@ -232,6 +268,7 @@ All API responses are JSON.
 3. `ZT_PROVIDER` selects provider mode; startup validation fails if mode is invalid or required credentials are missing.
 4. OAuth transient values (`state`, `nonce`, verifier) are short-lived and purged after use or expiry.
 5. PeeringDB access tokens are stored encrypted only when required for async behavior; otherwise kept in session context only.
+6. Local password material is stored only as non-reversible hashes and never logged.
 
 ## 9. Required Environment Variables
 1. `APP_SECRET_KEY`
@@ -240,15 +277,20 @@ All API responses are JSON.
 4. `PEERINGDB_CLIENT_ID`
 5. `PEERINGDB_CLIENT_SECRET`
 6. `PEERINGDB_REDIRECT_URI`
-7. `ZT_PROVIDER` (`central|self_hosted_controller`)
-8. `ZT_CENTRAL_API_TOKEN` (required when `ZT_PROVIDER=central`)
-9. `ZT_CONTROLLER_BASE_URL` (required when `ZT_PROVIDER=self_hosted_controller`)
-10. `ZT_CONTROLLER_AUTH_TOKEN` (required when `ZT_PROVIDER=self_hosted_controller`)
+7. `LOCAL_AUTH_ENABLED` (`true|false`, default `true`)
+8. `ZT_PROVIDER` (`central|self_hosted_controller`)
+9. `ZT_CENTRAL_API_TOKEN` (required when `ZT_PROVIDER=central`)
+10. `ZT_CONTROLLER_BASE_URL` (required when `ZT_PROVIDER=self_hosted_controller`)
+11. `ZT_CONTROLLER_AUTH_TOKEN` (required when `ZT_PROVIDER=self_hosted_controller`)
 
 ## 10. Edge Cases
 1. Callback replay with used `state`: reject and audit.
 2. PeeringDB account with no eligible ASN: block request creation.
-3. Concurrent approve/reject operations: first write wins, later action gets conflict.
-4. Target ZeroTier network not found/inactive in configured provider: return failure with actionable admin guidance.
-5. Provisioning timeout or rate limit: preserve error context and enforce bounded retry behavior.
-6. Invalid provider mode or missing credentials: fail fast at startup with clear remediation logs.
+3. Local login with invalid password or unknown username: deterministic auth failure without user enumeration.
+4. Local login for disabled credential: reject and audit.
+5. CLI create user with duplicate username: deterministic conflict and no partial writes.
+6. CLI assignment includes unknown `zt_network_id`: validation failure and no partial writes.
+7. Concurrent approve/reject operations: first write wins, later action gets conflict.
+8. Target ZeroTier network not found/inactive in configured provider: return failure with actionable admin guidance.
+9. Provisioning timeout or rate limit: preserve error context and enforce bounded retry behavior.
+10. Invalid provider mode or missing credentials: fail fast at startup with clear remediation logs.

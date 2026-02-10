@@ -1,5 +1,5 @@
 # Application Flow
-Version: 0.2
+Version: 0.3
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `FRONTEND_GUIDELINES.md`, `IMPLEMENTATION_PLAN.md`
@@ -8,12 +8,13 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `FRONTEND_GUIDELINES.md`, `IMPLE
 1. `/` Landing page
 2. `/auth/login` Starts PeeringDB OAuth flow
 3. `/auth/callback` OAuth callback handler
-4. `/onboarding` ASN selection and join request form
-5. `/dashboard` Operator status page
-6. `/requests/:id` Operator request detail page
-7. `/admin/requests` Admin queue/list page
-8. `/admin/requests/:id` Admin request detail page
-9. `/error` Recoverable error page
+4. `/auth/local/login` Local username/password login handler (Auth Option A)
+5. `/onboarding` ASN selection and join request form
+6. `/dashboard` Operator status page
+7. `/requests/:id` Operator request detail page
+8. `/admin/requests` Admin queue/list page
+9. `/admin/requests/:id` Admin request detail page
+10. `/error` Recoverable error page
 
 ## 2. Status Model and Allowed Transitions
 1. `pending`: submitted, awaiting admin decision.
@@ -34,9 +35,9 @@ Allowed transitions:
 Forbidden transitions return conflict errors and do not mutate data.
 
 ## 3. Primary Operator Authentication and Request Flow
-Trigger: user clicks "Sign in with PeeringDB" on `/`.
+Trigger: user authenticates from `/` using either PeeringDB OAuth or Auth Option A local credentials.
 
-Sequence:
+Auth Option B (PeeringDB OAuth) sequence:
 1. User requests `/auth/login`.
 2. App generates `state`, `nonce`, and PKCE verifier/challenge.
 3. App redirects to PeeringDB authorization endpoint.
@@ -45,20 +46,46 @@ Sequence:
 6. App validates callback state and exchanges code for token set.
 7. App fetches profile and network authorization context from PeeringDB.
 8. App upserts user and ASN mappings, then establishes local session.
-9. Decision point:
+
+Auth Option A (local credentials) sequence:
+1. User submits username/password to `/auth/local/login`.
+2. App normalizes username, verifies credential hash, and checks credential status.
+3. App loads associated ASN/network assignments for the user.
+4. App establishes local session.
+
+Shared post-auth sequence:
+1. Decision point:
    - Eligible ASN(s) found: redirect to `/onboarding`.
    - No eligible ASN: redirect to `/error` with support path.
-10. User submits onboarding form (`asn`, `zt_network_id`, optional `node_id`, optional `notes`).
-11. App validates ownership and duplicate constraints.
-12. App creates `join_request` in `pending`, writes audit event, and redirects to `/requests/:id`.
+2. User submits onboarding form (`asn`, `zt_network_id`, optional `node_id`, optional `notes`).
+3. App validates ownership and duplicate constraints.
+4. App creates `join_request` in `pending`, writes audit event, and redirects to `/requests/:id`.
 
 Error branches:
 1. Missing/invalid callback `state`: reject callback, audit, redirect `/error`.
 2. Token exchange or upstream timeout: redirect `/error` with retry-login action.
-3. ASN ownership mismatch at submit time: show validation error, keep user on `/onboarding`.
-4. Duplicate active request for same ASN/network: show deterministic conflict message with link to existing request.
+3. Invalid local username/password: reject login with deterministic auth error and audit event.
+4. Disabled local credential: reject login and return support path.
+5. ASN ownership mismatch at submit time: show validation error, keep user on `/onboarding`.
+6. Duplicate active request for same ASN/network: show deterministic conflict message with link to existing request.
 
-## 4. Admin Review Flow
+## 4. Server CLI Local Account Provisioning Flow (Auth Option A)
+Trigger: admin/operator with server shell access runs local provisioning command.
+
+Sequence:
+1. Actor runs CLI command (for example, `uv run python -m app.cli.users create ...`).
+2. CLI validates required flags and mutually exclusive password input modes.
+3. CLI creates or updates `app_user` and `local_credential`.
+4. CLI sets optional `is_admin` and associated ASN/network assignments.
+5. CLI emits audit event metadata for account-provisioning action.
+6. Created user can authenticate through `/auth/local/login`.
+
+Error branches:
+1. Duplicate username: deterministic conflict output, no partial mutation.
+2. Unknown associated network ID or invalid ASN input: validation error, no mutation.
+3. Invalid password policy input: validation error, no mutation.
+
+## 5. Admin Review Flow
 Trigger: admin opens `/admin/requests`.
 
 Sequence:
@@ -75,7 +102,7 @@ Error branches:
 2. Missing reject reason: validation error, no mutation.
 3. Non-admin caller on admin route: authorization failure.
 
-## 5. Provisioning Flow
+## 6. Provisioning Flow
 Trigger: request enters `approved`.
 
 Sequence:
@@ -92,7 +119,7 @@ Failure handling:
 2. Terminal failures remain `failed` until admin explicitly retries.
 3. Misconfiguration (invalid provider mode or missing credential) fails fast at startup and blocks worker processing.
 
-## 6. Admin Retry Flow
+## 7. Admin Retry Flow
 Trigger: admin clicks retry on a `failed` request.
 
 Sequence:
@@ -104,7 +131,7 @@ Sequence:
 Error branch:
 1. Retry attempted from non-`failed` state: conflict response with current status.
 
-## 7. Operator Return Flow
+## 8. Operator Return Flow
 Trigger: authenticated operator visits `/dashboard`.
 
 Sequence:
@@ -112,14 +139,15 @@ Sequence:
 2. Each row links to `/requests/:id`.
 3. If no active request exists for an eligible ASN/network pair, onboarding action is available.
 
-## 8. Route Guards
+## 9. Route Guards
 1. `/onboarding`, `/dashboard`, `/requests/:id`: authenticated user required.
 2. `/admin/*`: admin role required.
-3. `/auth/callback`: public route, strict OAuth validation only.
+3. `/auth/callback` and `/auth/local/login`: public routes with strict auth validation.
 4. Cross-user access to `/requests/:id` returns denied/not-found behavior by policy.
 
-## 9. UX Contract for Key Failures
+## 10. UX Contract for Key Failures
 1. Auth callback failure: show retry login action and short diagnostic code.
 2. Duplicate request conflict: show existing request link instead of generic error.
 3. Provisioning failure: show last error timestamp and admin remediation path.
 4. Empty ASN eligibility: show why onboarding is blocked and how to get support.
+5. Local login failure: show non-enumerating invalid-credential message.

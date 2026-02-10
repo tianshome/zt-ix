@@ -1,12 +1,12 @@
 # Product Requirements Document (PRD)
-Version: 0.2
+Version: 0.3
 Date: 2026-02-10
 Product: ZT Internet Exchange (ZT-IX) Controller
 
 Related docs: `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 
 ## 1. Objective
-Build a self-service controller that lets verified network operators join a virtual IX fabric on ZeroTier, using PeeringDB identity as the source of truth and a configurable ZeroTier provisioning provider.
+Build a self-service controller that lets verified network operators join a virtual IX fabric on ZeroTier, using PeeringDB OAuth and Auth Option A local credentials while keeping one canonical app user record and a configurable ZeroTier provisioning provider.
 
 ## 2. Target Users
 1. Network operators who maintain ASN records in PeeringDB.
@@ -18,30 +18,34 @@ Virtual IX onboarding is often manual and inconsistent. Operators need a standar
 
 ## 4. In Scope
 1. PeeringDB OAuth login flow and local session establishment.
-2. ASN and network-context retrieval from PeeringDB APIs.
-3. Join request workflow (`pending`, review, approve/reject, provisioning outcomes).
-4. ZeroTier member provisioning through a provider abstraction.
-5. Phase 1 provider modes:
+2. Auth Option A local username/password login flow for pre-provisioned users.
+3. Server CLI account provisioning for local users, including admin flag and associated ASN/network assignments.
+4. ASN and network-context retrieval from PeeringDB APIs for PeeringDB-authenticated users.
+5. Join request workflow (`pending`, review, approve/reject, provisioning outcomes).
+6. ZeroTier member provisioning through a provider abstraction.
+7. Phase 1 provider modes:
    - `central` (ZeroTier Central API token auth)
    - `self_hosted_controller` (local controller API with auth token)
-6. Operator and admin UI for request lifecycle visibility.
-7. Audit logging for auth, decisions, and provisioning actions.
+8. Operator and admin UI for request lifecycle visibility.
+9. Audit logging for auth, decisions, and provisioning actions.
 
 ## 5. Out of Scope (Non-Goals)
 1. BGP session orchestration across routers.
 2. Billing/invoicing.
 3. Full NMS replacement.
 4. Multi-cloud overlay orchestration outside ZeroTier.
-5. Identity providers beyond PeeringDB in phase 1.
+5. Additional identity providers beyond PeeringDB OAuth and Auth Option A local credentials in phase 1.
 6. Automated deployment/management of custom ZeroTier roots/planet infrastructure.
 
 ## 6. User Stories
 1. As an operator, I can log in with PeeringDB so I do not create a separate identity.
-2. As an operator, I can select my eligible ASN and request IX access.
-3. As an admin, I can approve or reject requests with clear reasons.
-4. As an admin, I can trigger ZeroTier authorization for approved requests through the configured provider.
-5. As an operator, I can see whether my request is pending, provisioning, active, rejected, or failed.
-6. As an auditor, I can view immutable logs of key actions.
+2. As an operator, I can log in with a locally provisioned username/password account when PeeringDB OAuth is not used for that account.
+3. As an operator, I can select my eligible ASN and request IX access.
+4. As an admin, I can approve or reject requests with clear reasons.
+5. As an admin, I can trigger ZeroTier authorization for approved requests through the configured provider.
+6. As an admin/operator with server access, I can create local accounts from CLI with custom admin and associated ASN/network options.
+7. As an operator, I can see whether my request is pending, provisioning, active, rejected, or failed.
+8. As an auditor, I can view immutable logs of key actions.
 
 ## 7. Roles and Permissions
 1. Operator:
@@ -56,19 +60,23 @@ Virtual IX onboarding is often manual and inconsistent. Operators need a standar
 
 ## 8. Features and Acceptance Criteria
 
-### F1. PeeringDB Authentication
+### F1. Authentication (PeeringDB + Auth Option A Local Credentials)
 Acceptance criteria:
 1. User can initiate login via PeeringDB OAuth endpoints.
 2. Callback validates `state` and `nonce` before session creation.
-3. On success, local user is upserted by `peeringdb_user_id`.
-4. On callback errors, user is sent to recoverable error path with retry action.
-5. Requested OAuth scopes are explicitly documented and tested.
+3. On OAuth success, local user is upserted by `peeringdb_user_id`.
+4. Local users can authenticate with username/password using stored password hashes.
+5. Local credential records are provisioned via server CLI only; public self-signup is not included in phase 1.
+6. On auth errors, user is sent to recoverable error path with retry action.
+7. Requested OAuth scopes are explicitly documented and tested.
 
 ### F2. ASN Discovery and Eligibility
 Acceptance criteria:
-1. System fetches user identity and authorized network context from PeeringDB.
-2. User can submit requests only for ASNs they are authorized to represent.
-3. If no eligible ASN is found, UI shows explicit reason and support path.
+1. System fetches user identity and authorized network context from PeeringDB for OAuth-authenticated users.
+2. System uses locally assigned ASN/network associations for Auth Option A local users.
+3. User can submit requests only for ASNs they are authorized to represent.
+4. If associated network restrictions are configured for a user, submissions must match those associations.
+5. If no eligible ASN is found, UI shows explicit reason and support path.
 
 ### F3. Join Request Workflow
 Acceptance criteria:
@@ -106,7 +114,8 @@ Acceptance criteria:
 1. Session cookies are HTTP-only and Secure in production.
 2. State-changing requests enforce CSRF protections.
 3. Provider credentials are sourced from runtime secrets, never persisted in plaintext DB rows.
-4. Unauthorized access to another user's request returns denied/not-found behavior by policy.
+4. Local passwords are never stored in plaintext and are verified with constant-time comparison.
+5. Unauthorized access to another user's request returns denied/not-found behavior by policy.
 
 ## 9. Non-Functional Requirements
 1. Reliability:
@@ -131,12 +140,15 @@ Acceptance criteria:
 2. ZeroTier provider credentials are high-impact secrets and require strict runtime secret handling.
 3. Incorrect ASN authorization logic can cause unauthorized onboarding.
 4. Provider API behavior differences can cause drift without explicit contract tests.
+5. Local credential handling introduces password lifecycle and brute-force risk requiring test-backed controls.
 
 ## 12. Assumptions and Open Questions
 1. Assumption: Phase 1 keeps admin approval as the default control path; policy auto-approval is not required for initial release.
 2. Assumption: One request maps to one target ZeroTier network per submission.
-3. Open question: Should policy-based auto-approval be a phase 1.1 scope item or deferred to a later phase?
-4. Open question: What minimum PeeringDB scope set is required in production if future API calls expand?
+3. Assumption: Auth Option A local accounts are created and managed from server CLI, not self-signup.
+4. Open question: Should policy-based auto-approval be a phase 1.1 scope item or deferred to a later phase?
+5. Open question: For local users, should empty associated-network assignment mean unrestricted network eligibility or deny-by-default?
+6. Open question: What minimum PeeringDB scope set is required in production if future API calls expand?
 
 ## 13. Definition of Done
 1. All in-scope features meet acceptance criteria in this PRD.
@@ -144,3 +156,4 @@ Acceptance criteria:
 3. Deployment docs and runbook exist.
 4. Security checklist completed for session, CSRF, and secret management.
 5. Provisioning adapter contract tests cover both `central` and `self_hosted_controller` modes.
+6. Local credential auth path and CLI provisioning path have automated test coverage.

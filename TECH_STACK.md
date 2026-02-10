@@ -1,5 +1,5 @@
 # Technical Stack
-Version: 0.2
+Version: 0.3
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
@@ -16,6 +16,7 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 1. Authlib 1.3.2
 2. httpx 0.28.1
 3. itsdangerous 2.2.0
+4. Python stdlib `hashlib`/`hmac` for local credential hashing and constant-time verification (Auth Option A)
 
 ## 4. Data Layer
 1. SQLAlchemy 2.0.37
@@ -74,12 +75,16 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
    - Auth header: `X-ZT1-Auth: <token>`
 6. Provisioning mode is configuration-driven:
    - `ZT_PROVIDER=central|self_hosted_controller`
+7. Authentication mode support:
+   - Auth Option A: local DB-backed username/password credentials + server CLI account provisioning
+   - Auth Option B: PeeringDB OAuth/OIDC
 
 ## 11. External API Constraints
 1. ZeroTier Central API rate limits are plan-dependent; provisioning worker must handle HTTP `429` with bounded retries and backoff.
 2. PeeringDB OAuth scopes and profile payload shape are treated as external contracts and must be validated in integration tests.
 3. PeeringDB OAuth app registration must use signing algorithm `RSA with SHA-2 256` (RS256) for the OIDC callback flow validated by this project.
 4. Provider-specific behavior differences are isolated behind the contract defined in `BACKEND_STRUCTURE.md`.
+5. Local auth is first-party only and must enforce normalized usernames, deterministic failures, and non-plaintext password storage.
 
 ## 12. Version Pinning Policy
 1. All Python dependencies must be pinned in `pyproject.toml` and lockfile (`uv.lock`) to exact versions above.

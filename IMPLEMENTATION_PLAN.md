@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 0.3
+Version: 0.4
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -10,20 +10,35 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 3. Assumption: local development uses the following dependency profile:
    - Docker Compose for PostgreSQL/Redis only
    - API and worker run directly via `uv run`
-4. Assumption: route-server automation in this plan follows "Option A" (worker-driven SSH orchestration to remote Ubuntu/Linux route servers).
-5. Requirement: each approved ASN must produce explicit generated BIRD peer config on every configured route server.
-6. Requirement: generated BIRD policy path must enable ROA/RPKI validation for route acceptance decisions.
-7. Open question: policy-based auto-approval scope (if any) remains deferred pending product decision.
-8. Open question: target retry limits/backoff constants should be finalized before phase 5 implementation.
+4. Assumption: authentication planning follows "Auth Option A" (local credentials table, canonical `app_user`, server CLI provisioning) and "Auth Option B" (PeeringDB OAuth).
+5. Assumption: route-server automation in this plan follows "Route Server Option A" (worker-driven SSH orchestration to remote Ubuntu/Linux route servers).
+6. Requirement: each approved ASN must produce explicit generated BIRD peer config on every configured route server.
+7. Requirement: generated BIRD policy path must enable ROA/RPKI validation for route acceptance decisions.
+8. Open question: policy-based auto-approval scope (if any) remains deferred pending product decision.
+9. Open question: target retry limits/backoff constants should be finalized before phase 5 implementation.
+10. Open question: for Auth Option A, does empty associated-network assignment mean unrestricted access or deny-by-default?
+
+## 1.1 Option Labels (Disambiguation)
+1. Auth Option A:
+   - Local username/password credentials in a dedicated table.
+   - `app_user` remains canonical user record.
+   - Accounts created/managed from server CLI.
+2. Auth Option B:
+   - PeeringDB OAuth flow.
+3. Route Server Option A:
+   - Worker-driven SSH fanout and BIRD apply workflow.
+4. Route Server Option B:
+   - Deferred persisted per-route-server state model.
 
 ## 2. Traceability Map
-1. PRD `F1` and `F2` map to phases 3 and 4.
-2. PRD `F3` and `F5` map to phase 4.
-3. PRD `F4` maps to phase 5.
-4. PRD `F6` and `F7` map to phases 4, 5, and 7.
-5. Frontend UX/accessibility requirements map to phase 6.
-6. Release and operational requirements map to phase 8.
-7. Route-server orchestration extension (Option A) maps to phase 5 and release validation in phase 8.
+1. PRD `F1` maps to phase 3.
+2. PRD `F2` maps to phases 3 and 4.
+3. PRD `F3` and `F5` map to phase 4.
+4. PRD `F4` maps to phase 5.
+5. PRD `F6` and `F7` map to phases 3, 4, 5, and 7.
+6. Frontend UX/accessibility requirements map to phase 6.
+7. Release and operational requirements map to phase 8.
+8. Route-server orchestration extension (Route Server Option A) maps to phase 5 and release validation in phase 8.
 
 ## 3. Phase 1: Project Bootstrap
 Implements: foundational requirements for all PRD features.
@@ -60,33 +75,54 @@ Verification:
 1. `alembic upgrade head`
 2. `pytest tests/db -q`
 
-## 5. Phase 3: Auth Integration (PeeringDB)
-Implements: PRD `F1`, part of `F2`, `F7`.
+## 5. Phase 3: Authentication Integration (Auth Option A + Auth Option B)
+Implements: PRD `F1`, part of `F2`, `F6`, `F7`.
 
 Steps:
-1. Step 3.1: Implement `/auth/login` with state/nonce/PKCE generation.
-2. Step 3.2: Implement `/auth/callback` token exchange + state/nonce validation.
-3. Step 3.3: Upsert user and fetch authorized ASN/network context from PeeringDB.
-4. Step 3.4: Establish secure session middleware and logout behavior.
-5. Step 3.5: Add integration tests for success and failure callback paths.
+1. Step 3.1: Keep `/auth/login` with state/nonce/PKCE generation (Auth Option B).
+2. Step 3.2: Keep `/auth/callback` token exchange + state/nonce validation (Auth Option B).
+3. Step 3.3: Upsert canonical `app_user` and fetch authorized ASN/network context from PeeringDB.
+4. Step 3.4: Extend schema for Auth Option A:
+   - add `local_credential`
+   - add `user_network_access`
+   - make `app_user.peeringdb_user_id` nullable while preserving uniqueness when present
+5. Step 3.5: Implement local credential repository + password hashing/verification service.
+6. Step 3.6: Implement `/auth/local/login` with deterministic auth failures and audit events.
+7. Step 3.7: Implement server CLI user provisioning command(s) with options:
+   - username/password input mode
+   - `--admin` (optional)
+   - repeatable ASN assignment
+   - repeatable associated-network assignment
+8. Step 3.8: Align shared session establishment and logout behavior across both auth modes.
+9. Step 3.9: Add tests for:
+   - OAuth success/failure callback paths
+   - local credential success/failure paths
+   - CLI provisioning validation and mutation behavior
 
 Exit criteria:
-1. Valid login creates session and user profile.
-2. Invalid callback paths fail safely and audit appropriately.
+1. Valid login creates session and user profile for both Auth Option A and Auth Option B.
+2. Invalid callback and local-login paths fail safely and audit appropriately.
+3. CLI provisioning can create and update local users with admin and ASN/network association options.
 
 Verification:
 1. `pytest tests/auth -q`
-2. Manual check: `/auth/login -> /auth/callback -> /onboarding`.
+2. `pytest tests/auth_local -q`
+3. `pytest tests/cli -q`
+4. Manual checks:
+   - `/auth/login -> /auth/callback -> /onboarding`
+   - `/auth/local/login -> /onboarding`
+   - CLI create local user with and without admin/network options
 
 ## 6. Phase 4: Request Workflow
 Implements: PRD `F2`, `F3`, `F5`, `F6`.
 
 Steps:
 1. Step 4.1: Implement request creation endpoint with ASN ownership and duplicate protections.
-2. Step 4.2: Build operator dashboard and request detail pages.
-3. Step 4.3: Build admin queue and approve/reject APIs with role checks.
-4. Step 4.4: Emit audit events for all workflow state transitions.
-5. Step 4.5: Add API and UI tests for transitions and conflict handling.
+2. Step 4.2: Enforce associated-network checks for users with configured `user_network_access`.
+3. Step 4.3: Build operator dashboard and request detail pages.
+4. Step 4.4: Build admin queue and approve/reject APIs with role checks.
+5. Step 4.5: Emit audit events for all workflow state transitions.
+6. Step 4.6: Add API and UI tests for transitions, conflict handling, and associated-network authorization failures.
 
 Exit criteria:
 1. Operator can submit request and track state.
@@ -97,8 +133,9 @@ Verification:
 2. Manual checks:
    - duplicate request conflict path
    - reject-without-reason validation path
+   - associated-network restriction enforcement path
 
-## 7. Phase 5: ZeroTier and Route Server Provisioning (Option A)
+## 7. Phase 5: ZeroTier and Route Server Provisioning (Route Server Option A)
 Implements: PRD `F4`, `F5`, `F6`, `F7`.
 
 Steps:
@@ -183,7 +220,7 @@ Verification:
 1. E2E staging checklist signed off.
 2. Final regression test pass before release tag.
 
-## 11. TODO: Phase 9 (Option B) - Persisted Route Server State Model
+## 11. TODO: Phase 9 (Route Server Option B) - Persisted Route Server State Model
 Status: deferred until after Phase 8 completion.
 
 Steps:

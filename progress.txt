@@ -429,3 +429,45 @@ Next
 
 Known bugs / regressions
 1. None identified for this documentation-only update.
+
+---
+
+Update: 2026-02-10 (Auth Option A documentation alignment)
+
+Decision
+1. Added authentication planning/documentation for Auth Option A:
+   - Local credentials table with canonical `app_user` model.
+   - Server CLI account provisioning with admin and associated ASN/network options.
+2. Clarified option naming to avoid ambiguity with existing route-server options:
+   - `Auth Option A` / `Auth Option B`
+   - `Route Server Option A` / `Route Server Option B`
+
+Completed
+1. Updated `PRD.md` (Version 0.3):
+   - Added Auth Option A scope, user stories, acceptance criteria, security expectations, and DoD coverage.
+2. Updated `APP_FLOW.md` (Version 0.3):
+   - Added `/auth/local/login` flow and explicit server CLI local-account provisioning flow.
+3. Updated `BACKEND_STRUCTURE.md` (Version 0.3):
+   - Added canonical-user + local-credential data model (`local_credential`, `user_network_access`) and related auth/env/edge-case contracts.
+4. Updated `IMPLEMENTATION_PLAN.md` (Version 0.4):
+   - Added detailed Auth Option A implementation steps (schema, auth route, CLI provisioning, tests).
+   - Disambiguated auth option naming from route-server options.
+5. Updated `TECH_STACK.md` (Version 0.3):
+   - Documented local credential handling approach and authentication mode support without adding new external dependencies.
+
+In progress
+1. No implementation code changes in this update.
+
+Next
+1. Resolve open question: for Auth Option A, should empty associated-network assignment be unrestricted or deny-by-default?
+2. Start implementation from `IMPLEMENTATION_PLAN.md` Phase 3 Auth Option A steps:
+   - schema migration
+   - local credential service/route
+   - CLI provisioning command
+   - tests
+
+Known bugs / regressions
+1. None identified for this documentation-only update.
+
+Notes
+1. This update changes planning contracts only; runtime behavior is unchanged until implementation starts.
