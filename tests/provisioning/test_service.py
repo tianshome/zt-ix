@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.enums import RequestStatus
 from app.db.models import AppUser, AuditEvent, JoinRequest, ZtMembership, ZtNetwork
 from app.provisioning.providers.base import ProviderAuthError, ProvisionResult
+from app.provisioning.route_servers import RouteServerSyncError, RouteServerSyncResult
 from app.provisioning.service import (
     process_join_request_provisioning_with_provider,
 )
@@ -49,6 +50,35 @@ class StubProvider:
         return self.authorize_result
 
 
+@dataclass(slots=True)
+class StubRouteServerSyncService:
+    sync_error: Exception | None = None
+    sync_results: list[RouteServerSyncResult] = field(
+        default_factory=lambda: [
+            RouteServerSyncResult(
+                host="rs1.example.net",
+                remote_path="/etc/bird/ztix-peers.d/ztix_as64512_req_deadbeef.conf",
+                config_sha256="abc123",
+            )
+        ]
+    )
+    sync_calls: list[tuple[uuid.UUID, int, str, str, list[str]]] = field(default_factory=list)
+
+    def sync_desired_config(
+        self,
+        *,
+        request_id: uuid.UUID,
+        asn: int,
+        zt_network_id: str,
+        node_id: str,
+        assigned_ips: list[str],
+    ) -> list[RouteServerSyncResult]:
+        self.sync_calls.append((request_id, asn, zt_network_id, node_id, assigned_ips))
+        if self.sync_error is not None:
+            raise self.sync_error
+        return self.sync_results
+
+
 def test_successful_provisioning_transitions_request_to_active(db_session: Session) -> None:
     request_row = _seed_join_request(
         db_session,
@@ -85,6 +115,71 @@ def test_successful_provisioning_transitions_request_to_active(db_session: Sessi
     provisioning_actions = list(provisioning_actions_result)
     assert "provisioning.started" in provisioning_actions
     assert "provisioning.succeeded" in provisioning_actions
+
+
+def test_successful_provisioning_syncs_route_servers_when_service_provided(
+    db_session: Session,
+) -> None:
+    request_row = _seed_join_request(
+        db_session,
+        status=RequestStatus.APPROVED,
+        node_id="abcde12345",
+    )
+    provider = StubProvider()
+    route_sync_service = StubRouteServerSyncService()
+
+    process_join_request_provisioning_with_provider(
+        db_session=db_session,
+        request_id=request_row.id,
+        provider=provider,
+        route_server_sync_service=route_sync_service,
+    )
+
+    refreshed = db_session.get(JoinRequest, request_row.id)
+    assert refreshed is not None
+    assert refreshed.status is RequestStatus.ACTIVE
+    assert len(route_sync_service.sync_calls) == 1
+
+    sync_events = (
+        db_session.execute(
+            select(AuditEvent)
+            .where(
+                AuditEvent.action == "route_server.sync.succeeded",
+                AuditEvent.target_id == str(request_row.id),
+            )
+            .order_by(AuditEvent.created_at.asc())
+        )
+        .scalars()
+        .all()
+    )
+    assert len(sync_events) == 1
+    assert sync_events[0].event_metadata["server_count"] == 1
+
+
+def test_route_server_sync_failure_sets_request_failed(db_session: Session) -> None:
+    request_row = _seed_join_request(
+        db_session,
+        status=RequestStatus.APPROVED,
+        node_id="abcde12345",
+    )
+    provider = StubProvider()
+    route_sync_service = StubRouteServerSyncService(
+        sync_error=RouteServerSyncError("rs2 unavailable"),
+    )
+
+    process_join_request_provisioning_with_provider(
+        db_session=db_session,
+        request_id=request_row.id,
+        provider=provider,
+        route_server_sync_service=route_sync_service,
+    )
+
+    refreshed = db_session.get(JoinRequest, request_row.id)
+    assert refreshed is not None
+    assert refreshed.status is RequestStatus.FAILED
+    assert refreshed.retry_count == 1
+    assert refreshed.last_error is not None
+    assert refreshed.last_error.startswith("route_server_sync_error")
 
 
 def test_missing_node_id_fails_with_actionable_error(db_session: Session) -> None:

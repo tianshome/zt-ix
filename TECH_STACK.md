@@ -1,5 +1,5 @@
 # Technical Stack
-Version: 0.3
+Version: 0.4
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
@@ -47,6 +47,8 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 1. uv 0.5.20
 2. Docker Engine 27.4.1
 3. Docker Compose v2.32.1
+4. OpenSSH client (`ssh`) for route-server fanout workflows
+5. BIRD 3.x for route-server config syntax validation and runtime
 
 ## 9.1 Local Development Dependency Profile
 1. Selected profile: infrastructure-only containers.

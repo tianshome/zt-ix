@@ -19,6 +19,12 @@ from app.provisioning.providers import (
     ProvisionResult,
     create_provisioning_provider,
 )
+from app.provisioning.route_servers import (
+    RouteServerSyncer,
+    RouteServerSyncError,
+    RouteServerSyncResult,
+    create_route_server_sync_service,
+)
 from app.repositories.audit_events import AuditEventRepository
 from app.repositories.errors import InvalidStateTransitionError
 from app.repositories.join_requests import JoinRequestRepository
@@ -33,11 +39,13 @@ class ProvisioningInputError(Exception):
 
 def process_join_request_provisioning(*, request_id: uuid.UUID, settings: AppSettings) -> None:
     provider = create_provisioning_provider(settings)
+    route_server_sync_service = create_route_server_sync_service(settings)
     with SessionLocal() as db_session:
         process_join_request_provisioning_with_provider(
             db_session=db_session,
             request_id=request_id,
             provider=provider,
+            route_server_sync_service=route_server_sync_service,
         )
 
 
@@ -46,6 +54,7 @@ def process_join_request_provisioning_with_provider(
     db_session: Session,
     request_id: uuid.UUID,
     provider: ProvisioningProvider,
+    route_server_sync_service: RouteServerSyncer | None = None,
 ) -> None:
     request_repo = JoinRequestRepository(db_session)
     audit_repo = AuditEventRepository(db_session)
@@ -134,6 +143,34 @@ def process_join_request_provisioning_with_provider(
             is_authorized=provision_result.is_authorized,
             assigned_ips=provision_result.assigned_ips,
         )
+        route_server_results: list[RouteServerSyncResult] = []
+        if route_server_sync_service is not None:
+            route_server_results = route_server_sync_service.sync_desired_config(
+                request_id=request_row.id,
+                asn=request_row.asn,
+                zt_network_id=request_row.zt_network_id,
+                node_id=request_row.node_id,
+                assigned_ips=provision_result.assigned_ips,
+            )
+            if route_server_results:
+                audit_repo.create_event(
+                    action="route_server.sync.succeeded",
+                    target_type="join_request",
+                    target_id=str(request_row.id),
+                    actor_user_id=request_row.user_id,
+                    metadata={
+                        "server_count": len(route_server_results),
+                        "servers": _serialize_route_server_results(route_server_results),
+                    },
+                )
+            else:
+                audit_repo.create_event(
+                    action="route_server.sync.skipped",
+                    target_type="join_request",
+                    target_id=str(request_row.id),
+                    actor_user_id=request_row.user_id,
+                    metadata={"reason": "no_route_servers_configured"},
+                )
         old_status = request_row.status
         request_repo.transition_status(request_row, RequestStatus.ACTIVE)
         _write_status_audit_event(
@@ -145,6 +182,7 @@ def process_join_request_provisioning_with_provider(
             metadata={
                 "provider_name": provision_result.provider_name,
                 "member_id": provision_result.member_id,
+                "route_server_count": len(route_server_results),
             },
         )
         audit_repo.create_event(
@@ -156,11 +194,17 @@ def process_join_request_provisioning_with_provider(
                 "provider_name": provision_result.provider_name,
                 "member_id": provision_result.member_id,
                 "assigned_ips": provision_result.assigned_ips,
+                "route_server_count": len(route_server_results),
                 "completed_at": datetime.now(UTC).isoformat(),
             },
         )
         db_session.commit()
-    except (ProvisioningProviderError, ProvisioningInputError, IntegrityError) as exc:
+    except (
+        ProvisioningProviderError,
+        ProvisioningInputError,
+        RouteServerSyncError,
+        IntegrityError,
+    ) as exc:
         _mark_failed(
             db_session=db_session,
             request_id=request_id,
@@ -298,6 +342,8 @@ def _exception_error_code(exc: Exception) -> str:
         return exc.error_code
     if isinstance(exc, ProvisioningInputError):
         return exc.error_code
+    if isinstance(exc, RouteServerSyncError):
+        return exc.error_code
     if isinstance(exc, IntegrityError):
         return "membership_integrity_error"
     return "unexpected_error"
@@ -309,3 +355,16 @@ def _exception_message(exc: Exception) -> str:
     if not message:
         return error_code
     return f"{error_code}: {message}"
+
+
+def _serialize_route_server_results(
+    route_server_results: list[RouteServerSyncResult],
+) -> list[dict[str, str]]:
+    return [
+        {
+            "host": result.host,
+            "remote_path": result.remote_path,
+            "config_sha256": result.config_sha256,
+        }
+        for result in route_server_results
+    ]

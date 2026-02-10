@@ -36,6 +36,15 @@ class AppSettings:
     zt_central_api_token: str = ""
     zt_controller_base_url: str = "http://127.0.0.1:9993/controller"
     zt_controller_auth_token: str = ""
+    route_server_hosts: tuple[str, ...] = ()
+    route_server_ssh_user: str = "root"
+    route_server_ssh_port: int = 22
+    route_server_ssh_private_key_path: str = ""
+    route_server_ssh_connect_timeout_seconds: float = 10.0
+    route_server_ssh_strict_host_key: bool = True
+    route_server_ssh_known_hosts_file: str = ""
+    route_server_remote_config_dir: str = "/etc/bird/ztix-peers.d"
+    route_server_local_asn: int = 65000
 
     @property
     def peeringdb_scope_param(self) -> str:
@@ -48,6 +57,7 @@ class AppSettings:
 
         scopes_raw = os.getenv("PEERINGDB_SCOPES", "openid profile email networks")
         scopes = _normalize_peeringdb_scopes(scopes_raw)
+        route_server_hosts = _parse_csv_list(os.getenv("ROUTE_SERVER_HOSTS", ""))
 
         return cls(
             app_env=app_env,
@@ -94,6 +104,28 @@ class AppSettings:
                 "http://127.0.0.1:9993/controller",
             ),
             zt_controller_auth_token=os.getenv("ZT_CONTROLLER_AUTH_TOKEN", ""),
+            route_server_hosts=route_server_hosts,
+            route_server_ssh_user=os.getenv("ROUTE_SERVER_SSH_USER", "root").strip(),
+            route_server_ssh_port=max(1, _env_int("ROUTE_SERVER_SSH_PORT", 22)),
+            route_server_ssh_private_key_path=os.getenv(
+                "ROUTE_SERVER_SSH_PRIVATE_KEY_PATH",
+                "",
+            ).strip(),
+            route_server_ssh_connect_timeout_seconds=max(
+                1.0,
+                _env_float("ROUTE_SERVER_SSH_CONNECT_TIMEOUT_SECONDS", 10.0),
+            ),
+            route_server_ssh_strict_host_key=_env_bool("ROUTE_SERVER_SSH_STRICT_HOST_KEY", True),
+            route_server_ssh_known_hosts_file=os.getenv(
+                "ROUTE_SERVER_SSH_KNOWN_HOSTS_FILE",
+                "",
+            ).strip(),
+            route_server_remote_config_dir=os.getenv(
+                "ROUTE_SERVER_REMOTE_CONFIG_DIR",
+                "/etc/bird/ztix-peers.d",
+            ).strip()
+            or "/etc/bird/ztix-peers.d",
+            route_server_local_asn=max(1, _env_int("ROUTE_SERVER_LOCAL_ASN", 65000)),
         )
 
 
@@ -145,6 +177,18 @@ def _normalize_peeringdb_scopes(scopes_raw: str) -> tuple[str, ...]:
         seen.add(scope)
         normalized.append(scope)
     return tuple(normalized)
+
+
+def _parse_csv_list(value: str) -> tuple[str, ...]:
+    parsed = [item.strip() for item in value.split(",") if item.strip()]
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for item in parsed:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return tuple(deduped)
 
 
 @lru_cache(maxsize=1)

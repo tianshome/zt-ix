@@ -88,3 +88,78 @@ Use these steps on a machine where a browser is available.
    - Visit `http://localhost:8000/auth/logout`.
    - Then request `http://localhost:8000/onboarding`.
    - Expect `401 authentication required`.
+
+## Route Server Setup (Sub-phase 5B)
+
+Sub-phase 5B writes deterministic per-request BIRD peer snippets to every host listed in
+`ROUTE_SERVER_HOSTS` over SSH. Repeat the steps below for each route server in that list.
+
+### 1) Controller-side env config
+Set these variables in `.env` on the API/worker host:
+
+```bash
+ROUTE_SERVER_HOSTS=rs1.example.net,rs2.example.net
+ROUTE_SERVER_SSH_USER=ztixsync
+ROUTE_SERVER_SSH_PORT=22
+ROUTE_SERVER_SSH_PRIVATE_KEY_PATH=/etc/zt-ix/keys/route_server_ed25519
+ROUTE_SERVER_SSH_CONNECT_TIMEOUT_SECONDS=10.0
+ROUTE_SERVER_SSH_STRICT_HOST_KEY=true
+ROUTE_SERVER_SSH_KNOWN_HOSTS_FILE=/etc/zt-ix/known_hosts
+ROUTE_SERVER_REMOTE_CONFIG_DIR=/etc/bird/ztix-peers.d
+ROUTE_SERVER_LOCAL_ASN=65000
+```
+
+### 2) Packages to install on each router
+Ubuntu/Debian example:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y bird2 openssh-server cron ca-certificates curl
+```
+
+Optional (for local RPKI validator/runtime):
+
+```bash
+sudo apt-get install -y routinator
+```
+
+### 3) Prepare SSH + config destination on each router
+Create a restricted sync user and target directory:
+
+```bash
+sudo useradd --create-home --shell /bin/bash ztixsync
+sudo install -o ztixsync -g ztixsync -m 750 -d /etc/bird/ztix-peers.d
+sudo install -o ztixsync -g ztixsync -m 700 -d /home/ztixsync/.ssh
+```
+
+Add the controller public key to `/home/ztixsync/.ssh/authorized_keys`, then ensure
+`ROUTE_SERVER_SSH_USER` and `ROUTE_SERVER_SSH_PRIVATE_KEY_PATH` match.
+
+### 4) Include generated snippets from `bird.conf`
+In each router’s `/etc/bird/bird.conf`, add include lines for generated peers and ROA tables:
+
+```bird
+router id 192.0.2.1;
+roa4 table ztix_roa_v4;
+roa6 table ztix_roa_v6;
+
+include "/etc/bird/ztix-peers.d/*.conf";
+```
+
+### 5) RPKI refresh cron job example
+If you run cron-driven ROA refresh, add a root cron entry to keep validator data current.
+Example (`/etc/cron.d/ztix-rpki-refresh`):
+
+```cron
+*/15 * * * * root routinator update >/var/log/ztix-rpki-update.log 2>&1
+```
+
+If you use a different validator workflow, keep ROA tables (`ztix_roa_v4` and `ztix_roa_v6`)
+fresh on the same cadence and run a config check before applying BIRD changes.
+
+### 6) Local syntax validation before apply
+On the route server, validate config syntax before any apply step:
+
+```bash
+bird -p -c /etc/bird/bird.conf
+```

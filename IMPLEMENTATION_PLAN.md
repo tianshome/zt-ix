@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 0.8
+Version: 0.9
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -9,12 +9,13 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - `[ ]` open and not yet implemented.
 - `[ ]` + `Blocked by` + `Reason` marks an explicitly blocked gap that must be revisited when the dependency is complete.
 
-## 0.1 Current Status Snapshot (through Phase 5A)
+## 0.1 Current Status Snapshot (through Phase 5B)
 - [x] Phase 1 bootstrap is complete.
 - [x] Phase 2 data/migration foundation is complete.
 - [x] Phase 3 auth integration (Auth Option A + Auth Option B) is complete for automated coverage.
 - [x] Phase 4 backend request workflow is complete for API + JSON route responses.
 - [x] Phase 5 Sub-phase 5A provider foundation is complete (Step 5.1 to Step 5.8).
+- [x] Phase 5 Sub-phase 5B route-server desired config generation is complete (Step 5.9 to Step 5.11).
 - [ ] Configurable auto-approval mode is planned but not implemented.
   - Blocked by: Phase 4 Step 4.7.
   - Reason: approval-mode policy evaluator behavior and guardrails are not implemented yet.
@@ -23,8 +24,8 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
   - Blocked by: Phase 6 Step 6.1 to Step 6.4.
   - Reason: current accepted scope uses JSON responses; frontend component/styling integration is deferred by plan.
 - [ ] Route-server integration (Route Server Option A).
-  - Blocked by: Phase 5 Sub-phase 5B and Sub-phase 5C implementation.
-  - Reason: route-server generation/apply logic has not been implemented yet.
+  - Blocked by: Phase 5 Sub-phase 5C implementation.
+  - Reason: route-server apply/convergence logic has not been implemented yet.
 
 ## 1. Planning Assumptions and Open Questions
 - [x] Assumption: manual admin approval is the default decision control.
@@ -200,31 +201,25 @@ Self-contained outcomes:
 Goal: generate deterministic per-ASN route-server configuration only after membership authorization succeeds.
 
 Steps:
-- [ ] Step 5.9: Add route-server sync service that fans out to all configured remote route servers over SSH after successful ZeroTier member authorization.
-- [ ] Step 5.10: Render explicit per-ASN BIRD peer snippets using ZeroTier-assigned endpoint addresses.
-  - Blocked by: Step 5.9.
-  - Reason: rendering inputs depend on completed route-server sync orchestration service.
-- [ ] Step 5.11: Enforce ROA/RPKI validation in generated BIRD configuration/policy path.
-  - Blocked by: Step 5.10.
-  - Reason: policy enforcement is part of the generated config artifacts produced by the renderer.
+- [x] Step 5.9: Add route-server sync service that fans out to all configured remote route servers over SSH after successful ZeroTier member authorization.
+- [x] Step 5.10: Render explicit per-ASN BIRD peer snippets using ZeroTier-assigned endpoint addresses.
+- [x] Step 5.11: Enforce ROA/RPKI validation in generated BIRD configuration/policy path.
 
 Self-contained outcomes:
-- [ ] Each approved ASN yields explicit generated BIRD peer config on every configured route server.
-- [ ] Generated BIRD policy path used by route-server peers includes ROA/RPKI validation.
+- [x] Each approved ASN yields explicit generated BIRD peer config on every configured route server.
+- [x] Generated BIRD policy path used by route-server peers includes ROA/RPKI validation.
 
 ### 7.3 Sub-phase 5C: Route Server Apply and Convergence
 Goal: safely apply generated BIRD config to all route servers and converge request state to `active` or `failed`.
 
 Steps:
 - [ ] Step 5.12: Apply BIRD updates safely on each route server (`bird -p`, `birdc configure check`, timed `birdc configure`, confirm/rollback workflow) and capture per-server outcomes.
-  - Blocked by: Step 5.9 to Step 5.11.
-  - Reason: apply workflow requires completed fanout/orchestration + generated config artifacts.
 - [ ] Step 5.13: Transition request to `active` only if all configured route servers apply successfully; otherwise set `failed` with actionable error context and retry path.
   - Blocked by: Step 5.12.
   - Reason: convergence logic depends on per-server apply outcomes.
 - [ ] Step 5.14: Add tests for config rendering, SSH command orchestration, multi-route-server partial failures, and retry idempotency.
-  - Blocked by: Step 5.9 to Step 5.13.
-  - Reason: test coverage depends on implemented renderer/orchestration/apply paths.
+  - Blocked by: Step 5.12 and Step 5.13.
+  - Reason: apply/convergence behavior must exist before full route-server failure-mode tests are final.
 
 Self-contained outcomes:
 - [ ] Request transitions to `active` only when all configured route servers succeed.
@@ -233,12 +228,12 @@ Self-contained outcomes:
 Phase 5 overall exit criteria:
 - [x] Both provider modes pass shared contract tests.
 - [x] Re-running same provisioning request does not duplicate membership rows.
-- [ ] Each approved ASN yields explicit generated BIRD peer config on every configured route server.
-- [ ] BIRD route-server policy path used by generated peers includes ROA/RPKI validation.
+- [x] Each approved ASN yields explicit generated BIRD peer config on every configured route server.
+- [x] BIRD route-server policy path used by generated peers includes ROA/RPKI validation.
 
 Verification:
 - [x] `pytest tests/provisioning -q`
-- [ ] `pytest tests/route_servers -q`
+- [x] `pytest tests/route_servers -q`
 - [ ] Manual checks:
   - provider selection by `ZT_PROVIDER`
   - admin retry from `failed` state

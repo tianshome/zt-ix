@@ -651,3 +651,49 @@ Next
 
 Known bugs / regressions
 1. No regressions detected in local lint/type/tests after Sub-phase 5A changes.
+
+---
+
+Update: 2026-02-10 (Sub-phase 5B implemented in code)
+
+Completed
+1. Implemented Phase 5 Sub-phase 5B Step 5.9 route-server SSH fanout service:
+   - Added `app/provisioning/route_servers.py` for config-driven remote route-server sync.
+   - Added runtime settings/env parsing for route-server host inventory, SSH options, remote config dir, and local route-server ASN.
+2. Implemented Step 5.10 deterministic per-ASN BIRD snippet rendering:
+   - Added deterministic renderer based on request ID, ASN, node ID, and ZeroTier-assigned endpoint IPs.
+   - Added one explicit BGP peer stanza per assigned endpoint address.
+3. Implemented Step 5.11 ROA/RPKI policy enforcement in generated config path:
+   - Added generated BIRD import filters using `roa_check(ztix_roa_v4, ...)` and `roa_check(ztix_roa_v6, ...)`.
+4. Integrated route-server sync into provisioning workflow:
+   - Route-server sync now runs after successful member authorization in provisioning path.
+   - Sync results are audited; sync failures transition request to `failed` with actionable error code/message.
+5. Added automated tests for route-server sub-phase behavior:
+   - New `tests/route_servers/test_sync.py` covers rendering output, SSH fanout, and aggregated failure handling.
+   - Extended provisioning service tests to cover route-server sync success and failure branches.
+6. Updated docs and tracking:
+   - Updated `.env.example` with route-server settings.
+   - Added README route-server setup section (per-router package install, SSH prep, BIRD include, RPKI cron example, syntax check).
+   - Aligned product/system docs with route-server Option A scope:
+     - `PRD.md`
+     - `APP_FLOW.md`
+     - `TECH_STACK.md`
+     - `BACKEND_STRUCTURE.md`
+   - Updated `IMPLEMENTATION_PLAN.md` to Version 0.9 with Step 5.9 to Step 5.11 marked complete.
+
+Verification
+1. `uv run ruff check .` passed.
+2. `uv run mypy .` passed.
+3. `uv run pytest tests/provisioning -q` passed.
+4. `uv run pytest tests/route_servers -q` passed.
+5. Generated-config syntax check passed with `bird -p -c /tmp/ztix-bird.conf`.
+
+In progress
+1. No active implementation tasks in this update.
+
+Next
+1. Implement Phase 5 Sub-phase 5C (Step 5.12 to Step 5.14): safe BIRD apply/check workflow per route server and convergence gating for request status transitions.
+2. Keep configurable approval mode (Phase 4 Step 4.7) blocked pending product/security guardrail sign-off.
+
+Known bugs / regressions
+1. None identified in local lint/type/tests for Sub-phase 5B scope.

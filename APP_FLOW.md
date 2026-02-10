@@ -1,5 +1,5 @@
 # Application Flow
-Version: 0.3
+Version: 0.4
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `FRONTEND_GUIDELINES.md`, `IMPLEMENTATION_PLAN.md`
@@ -109,15 +109,18 @@ Sequence:
 1. Worker dequeues job and atomically marks request `provisioning`.
 2. Worker resolves provider mode (`central` or `self_hosted_controller`).
 3. Worker calls provider adapter to authorize membership on target network.
-4. Decision point:
-   - Success: upsert membership data, set request `active`, emit audit event.
+4. Worker renders deterministic per-ASN route-server BIRD peer snippets using assigned endpoint addresses.
+5. Worker fans out generated snippets over SSH to all configured route servers.
+6. Decision point:
+   - Success: upsert membership data, set request `active`, emit audit events.
    - Failure: set request `failed`, increment retry metadata, emit audit event with error context.
-5. Operator/admin UIs reflect final status and error details permitted by role.
+7. Operator/admin UIs reflect final status and error details permitted by role.
 
 Failure handling:
 1. Transient provider/API failures may be retried by worker policy.
 2. Terminal failures remain `failed` until admin explicitly retries.
-3. Misconfiguration (invalid provider mode or missing credential) fails fast at startup and blocks worker processing.
+3. Route-server SSH/sync failures are treated as provisioning failures with actionable details.
+4. Misconfiguration (invalid provider mode or missing credential) fails fast at startup and blocks worker processing.
 
 ## 7. Admin Retry Flow
 Trigger: admin clicks retry on a `failed` request.

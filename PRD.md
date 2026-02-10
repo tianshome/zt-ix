@@ -1,12 +1,12 @@
 # Product Requirements Document (PRD)
-Version: 0.3
+Version: 0.4
 Date: 2026-02-10
 Product: ZT Internet Exchange (ZT-IX) Controller
 
 Related docs: `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 
 ## 1. Objective
-Build a self-service controller that lets verified network operators join a virtual IX fabric on ZeroTier, using PeeringDB OAuth and Auth Option A local credentials while keeping one canonical app user record and a configurable ZeroTier provisioning provider.
+Build a self-service controller that lets verified network operators join a virtual IX fabric on ZeroTier, using PeeringDB OAuth and Auth Option A local credentials while keeping one canonical app user record, a configurable ZeroTier provisioning provider, and deterministic route-server desired config generation.
 
 ## 2. Target Users
 1. Network operators who maintain ASN records in PeeringDB.
@@ -26,11 +26,15 @@ Virtual IX onboarding is often manual and inconsistent. Operators need a standar
 7. Phase 1 provider modes:
    - `central` (ZeroTier Central API token auth)
    - `self_hosted_controller` (local controller API with auth token)
-8. Operator and admin UI for request lifecycle visibility.
-9. Audit logging for auth, decisions, and provisioning actions.
+8. Route-server Option A desired-state generation:
+   - generate explicit per-ASN BIRD peer snippets using assigned endpoint addresses,
+   - sync snippets to each configured route server over SSH,
+   - enforce ROA/RPKI validation checks in generated policy path.
+9. Operator and admin UI for request lifecycle visibility.
+10. Audit logging for auth, decisions, and provisioning actions.
 
 ## 5. Out of Scope (Non-Goals)
-1. BGP session orchestration across routers.
+1. Full multi-vendor BGP lifecycle orchestration beyond documented BIRD route-server Option A workflow.
 2. Billing/invoicing.
 3. Full NMS replacement.
 4. Multi-cloud overlay orchestration outside ZeroTier.
@@ -46,6 +50,7 @@ Virtual IX onboarding is often manual and inconsistent. Operators need a standar
 6. As an admin/operator with server access, I can create local accounts from CLI with custom admin and associated ASN/network options.
 7. As an operator, I can see whether my request is pending, provisioning, active, rejected, or failed.
 8. As an auditor, I can view immutable logs of key actions.
+9. As an admin, I can confirm route-server desired config was generated and synced for approved requests.
 
 ## 7. Roles and Permissions
 1. Operator:
@@ -117,6 +122,13 @@ Acceptance criteria:
 4. Local passwords are never stored in plaintext and are verified with constant-time comparison.
 5. Unauthorized access to another user's request returns denied/not-found behavior by policy.
 
+### F8. Route Server Desired Config Generation (Option A)
+Acceptance criteria:
+1. After successful member authorization, worker generates deterministic BIRD peer snippets per request/ASN and assigned endpoint IPs.
+2. Generated snippets are synced to every configured route server over SSH.
+3. Generated peer import policy path includes ROA/RPKI validation checks for both IPv4 and IPv6.
+4. Route-server sync failures are captured with actionable error context and surfaced through request failure state + retry path.
+
 ## 9. Non-Functional Requirements
 1. Reliability:
    - Provisioning jobs are retry-safe and idempotent.
@@ -157,3 +169,4 @@ Acceptance criteria:
 4. Security checklist completed for session, CSRF, and secret management.
 5. Provisioning adapter contract tests cover both `central` and `self_hosted_controller` modes.
 6. Local credential auth path and CLI provisioning path have automated test coverage.
+7. Route-server desired config rendering and SSH fanout path have automated tests.

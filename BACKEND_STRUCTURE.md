@@ -1,5 +1,5 @@
 # Backend Structure
-Version: 0.3
+Version: 0.4
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
@@ -186,6 +186,19 @@ CREATE INDEX idx_user_network_access_user_id ON user_network_access(user_id);
 5. Idempotency rule:
    - Calling `authorize_member` repeatedly for same request/node/network must converge on one persisted membership row.
 
+## 5.1 Route Server Option A Contract (Sub-phase 5B)
+1. After successful member authorization, worker renders deterministic BIRD peer config from:
+   - request ID
+   - ASN
+   - node ID
+   - assigned endpoint IPs from provider result
+2. Generated peer config must enforce RPKI validation in import policy via ROA checks:
+   - `roa_check(ztix_roa_v4, ...)`
+   - `roa_check(ztix_roa_v6, ...)`
+3. Generated config is fanned out over SSH to every configured route server host from runtime settings.
+4. No persisted per-route-server DB model is required in Option A phase scope.
+5. Route-server sync failures must be surfaced as provisioning failures with retry-safe error context.
+
 ## 6. API Contract (v1)
 All API responses are JSON.
 
@@ -282,6 +295,15 @@ All API responses are JSON.
 9. `ZT_CENTRAL_API_TOKEN` (required when `ZT_PROVIDER=central`)
 10. `ZT_CONTROLLER_BASE_URL` (required when `ZT_PROVIDER=self_hosted_controller`)
 11. `ZT_CONTROLLER_AUTH_TOKEN` (required when `ZT_PROVIDER=self_hosted_controller`)
+12. `ROUTE_SERVER_HOSTS` (comma-separated SSH targets, empty disables route-server fanout)
+13. `ROUTE_SERVER_SSH_USER`
+14. `ROUTE_SERVER_SSH_PORT`
+15. `ROUTE_SERVER_SSH_PRIVATE_KEY_PATH`
+16. `ROUTE_SERVER_SSH_CONNECT_TIMEOUT_SECONDS`
+17. `ROUTE_SERVER_SSH_STRICT_HOST_KEY`
+18. `ROUTE_SERVER_SSH_KNOWN_HOSTS_FILE`
+19. `ROUTE_SERVER_REMOTE_CONFIG_DIR`
+20. `ROUTE_SERVER_LOCAL_ASN`
 
 ## 10. Edge Cases
 1. Callback replay with used `state`: reject and audit.

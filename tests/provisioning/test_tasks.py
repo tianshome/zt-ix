@@ -98,10 +98,12 @@ def test_process_join_request_provisioning_resolves_provider_from_settings(
         db_session: object,
         request_id: uuid.UUID,
         provider: DummyProvider,
+        route_server_sync_service: object,
     ) -> None:
         captured["request_id"] = request_id
         captured["provider_name"] = provider.provider_name
         captured["db_session_type"] = type(db_session).__name__
+        captured["route_server_sync_service_type"] = type(route_server_sync_service).__name__
 
     monkeypatch.setattr(
         service,
@@ -115,6 +117,7 @@ def test_process_join_request_provisioning_resolves_provider_from_settings(
     assert captured["request_id"] == request_id
     assert captured["provider_name"] == "dummy"
     assert captured["db_session_type"] == "object"
+    assert captured["route_server_sync_service_type"] == "RouteServerSyncService"
 
 
 def _settings(**overrides: Any) -> AppSettings:
