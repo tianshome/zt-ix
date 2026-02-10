@@ -7,6 +7,13 @@ ZeroTier controller for virtual Internet Exchange onboarding with PeeringDB iden
 ### Prerequisites
 - Python `3.13.x`
 - `uv` package manager
+- Docker Engine + Docker Compose plugin (for local PostgreSQL/Redis only)
+
+### Local dependency profile
+This repository uses the following for day-to-day development:
+- Run infrastructure dependencies (PostgreSQL + Redis) with Docker Compose.
+- Run application processes directly on host with `uv run` (API, worker, tests).
+- Do not default to full app-in-container workflow for inner-loop development.
 
 ### Install dependencies
 ```bash

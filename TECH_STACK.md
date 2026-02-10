@@ -47,6 +47,14 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 2. Docker Engine 27.4.1
 3. Docker Compose v2.32.1
 
+## 9.1 Local Development Dependency Profile
+1. Selected profile: infrastructure-only containers.
+2. Docker Compose is used for stateful dependencies only:
+   - PostgreSQL 16.6
+   - Redis 7.4.1
+3. Application processes run directly with `uv run` (API server, worker, and tests), not inside Docker by default.
+4. Full-container application runtime is reserved for parity checks and release validation, not the default inner-loop workflow.
+
 ## 10. External Integrations (Authoritative Endpoints and Auth)
 1. PeeringDB OAuth2 endpoints:
    - Authorization endpoint: `https://auth.peeringdb.com/oauth2/authorize/`

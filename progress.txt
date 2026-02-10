@@ -59,7 +59,7 @@ Open decisions before implementation
 
 ---
 
-Update: 2026-02-10 (Option 1 selected)
+Update: 2026-02-10
 
 Decision
 1. ZeroTier provisioning will use a provider abstraction with two supported modes:
@@ -128,3 +128,29 @@ Known bugs / regressions
 
 Notes
 1. `uv run` and `uv sync` required elevated permissions in this environment due cache directory restrictions.
+
+---
+
+Update: 2026-02-10 (Local dependency profile decision documented)
+
+Decision
+1. Selected for local development dependencies:
+   - Docker Compose for PostgreSQL and Redis only.
+   - API/worker/test processes run directly with `uv run`.
+
+Completed
+1. Documented the selected local dependency profile in:
+   - `TECH_STACK.md`
+   - `IMPLEMENTATION_PLAN.md`
+   - `README.md`
+
+In progress
+1. No implementation code changes in this update.
+
+Next
+1. Start Phase 2 Step 2.1: SQLAlchemy model layer per `BACKEND_STRUCTURE.md`.
+2. Start Phase 2 Step 2.2: Alembic initial migration from modeled schema.
+3. Add Phase 2 database invariant tests (unique active request constraint and status transition rules).
+
+Known bugs / regressions
+1. None identified for this documentation-only update.

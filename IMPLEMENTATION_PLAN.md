@@ -7,8 +7,11 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 ## 1. Planning Assumptions and Open Questions
 1. Assumption: phase 1 uses admin approval as default decision control.
 2. Assumption: provider mode is selected by `ZT_PROVIDER` and cannot be switched per-request.
-3. Open question: policy-based auto-approval scope (if any) remains deferred pending product decision.
-4. Open question: target retry limits/backoff constants should be finalized before phase 5 implementation.
+3. Assumption: local development uses the following dependency profile:
+   - Docker Compose for PostgreSQL/Redis only
+   - API and worker run directly via `uv run`
+4. Open question: policy-based auto-approval scope (if any) remains deferred pending product decision.
+5. Open question: target retry limits/backoff constants should be finalized before phase 5 implementation.
 
 ## 2. Traceability Map
 1. PRD `F1` and `F2` map to phases 3 and 4.
