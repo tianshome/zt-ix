@@ -244,7 +244,7 @@ Verification:
 - [x] Manual check: route-server apply succeeds across all configured servers for a provisioning attempt.
 - [x] Manual check: failed route-server apply captures actionable error context and supports retry idempotency.
 
-## 10. Phase 8: Self-Hosted Controller Lifecycle Ownership
+## 10. Phase 8: Self-Hosted ZeroTier Controller Lifecycle Ownership
 Implements: PRD `F4`, `F6`, `F7`, `F9`.
 Goal: implement minimum viable lifecycle ownership for self-hosted controller operation in release environments, without ZeroTier Central feature parity.
 
