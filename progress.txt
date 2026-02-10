@@ -1,0 +1,92 @@
+ZT-IX Brainstorming Progress
+Date: 2026-02-10
+
+What I looked up
+1. PeeringDB OAuth/OIDC docs:
+   - https://docs.peeringdb.com/howto/oauth/
+   - https://auth.peeringdb.com/register/
+2. ZeroTier API/auth docs:
+   - https://docs.zerotier.com/api/
+   - https://docs.zerotier.com/api-central/
+   - https://docs.zerotier.com/api-tokens/
+   - https://docs.zerotier.com/sso/
+
+Key findings that affect architecture
+1. PeeringDB supports OpenID Connect login and documented OAuth2/OIDC app registration.
+2. PeeringDB access tokens can call PeeringDB APIs with `Authorization: Bearer <access_token>`.
+3. PeeringDB user permission introspection is available from:
+   - `https://auth.peeringdb.com/oauth2/userinfo?scope=peeringdb.manage%20peeringdb.read`
+4. ZeroTier Central API is token-based (bearer API token), not a third-party OAuth login provider for this use case.
+5. ZeroTier docs also include OIDC SSO, but that is for ZeroTier service/device SSO, not app-to-Central API auth.
+
+How I would build this app
+1. Backend first (FastAPI + PostgreSQL)
+   - Implement PeeringDB OIDC Authorization Code flow with PKCE.
+   - Persist sessions and map PeeringDB user ID to local user record.
+   - Exchange code for tokens server-side and store access token encrypted at rest.
+2. Identity and policy layer
+   - Query PeeringDB API for ASN/network objects allowed for the user.
+   - Use PeeringDB userinfo/permissions scope checks for authorization gates.
+   - Enforce allowlist rules (for example, accepted ASN ranges or explicit ASN whitelist).
+3. ZeroTier orchestration layer
+   - Use a service-owned ZeroTier Central API token (stored as secret).
+   - For each approved ASN/user request:
+     - create or update member authorization in target ZeroTier network,
+     - assign managed IP if needed,
+     - write provisioning status/audit events.
+4. UX flow
+   - Login with PeeringDB -> choose ASN -> submit join request -> admin approval (or policy auto-approval) -> show active member state.
+   - Add clear status states: `pending`, `approved`, `provisioning`, `active`, `failed`.
+5. Operational safety
+   - Idempotent provisioning jobs.
+   - Retry with exponential backoff for ZeroTier API errors.
+   - Full audit log for all auth, approvals, and provisioning changes.
+
+Initial milestone breakdown
+1. Milestone 1: Auth and onboarding
+   - OIDC login, callback, session handling, ASN fetch.
+2. Milestone 2: Membership workflow
+   - Join request model, admin approve/reject, status tracking.
+3. Milestone 3: ZeroTier provisioning
+   - Central API client, member authorization, reconciliation task.
+4. Milestone 4: Hardening
+   - Tests, observability, rate limits, CSRF/session security.
+
+Open decisions before implementation
+1. Should approvals be fully automatic for verified ASN ownership or always admin-gated?
+2. Is one shared ZeroTier network sufficient, or does each ASN get isolated network segments?
+3. What exact PeeringDB scopes should be considered minimum for production?
+
+---
+
+Update: 2026-02-10 (Option 1 selected)
+
+Decision
+1. ZeroTier provisioning will use a provider abstraction with two supported modes:
+   - `central` (ZeroTier Central API)
+   - `self_hosted_controller` (self-hosted ZeroTier controller API via local service auth)
+2. Scope remains control-plane independence only; automated roots/planet management is out of scope for phase 1.
+
+Completed
+1. Updated planning docs to remove Central-only assumptions and define provider-based provisioning:
+   - `PRD.md`
+   - `APP_FLOW.md`
+   - `TECH_STACK.md`
+   - `BACKEND_STRUCTURE.md`
+   - `IMPLEMENTATION_PLAN.md`
+
+In progress
+1. No implementation code yet. Documentation alignment is complete.
+
+Next
+1. Implement Phase 5 Step 5.1 through Step 5.4:
+   - provider interface
+   - `central` adapter
+   - `self_hosted_controller` adapter
+   - Celery task provider selection from `ZT_PROVIDER`
+2. Add provider contract tests and adapter selection tests.
+3. Update `.env.example` for provider mode and credentials.
+
+Known risks / notes
+1. Self-hosted controller endpoint/auth behavior must be validated in integration tests before production rollout.
+2. Provider API differences can cause behavior drift without strict contract tests.
