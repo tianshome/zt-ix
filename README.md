@@ -1,3 +1,26 @@
 # ZT Internet Exchange
 
-ZeroTier Controller for a virtual Internet Exchange using peer-to-peer connections only (whenever possible) without hairpining through a central server. Self-service sign-up using PeeringDB OAuth to retrieve network details (ASN, etc.) 
+ZeroTier controller for virtual Internet Exchange onboarding with PeeringDB identity.
+
+## Phase 1 Bootstrap
+
+### Prerequisites
+- Python `3.13.x`
+- `uv` package manager
+
+### Install dependencies
+```bash
+uv sync --dev
+```
+
+### Start the API
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+### Verification commands
+```bash
+uv run ruff check .
+uv run mypy .
+uv run pytest -q
+```

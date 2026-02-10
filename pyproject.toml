@@ -1,7 +1,49 @@
 [project]
 name = "zt-ix"
 version = "0.1.0"
-description = "Controller for setting up ZeroTier for a full-mesh virtual internet exchange."
+description = "ZT-IX controller for PeeringDB-authenticated ZeroTier onboarding workflows."
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = []
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "alembic==1.14.0",
+    "authlib==1.3.2",
+    "celery==5.4.0",
+    "cryptography==44.0.0",
+    "fastapi==0.115.6",
+    "httpx==0.28.1",
+    "itsdangerous==2.2.0",
+    "jinja2==3.1.5",
+    "psycopg[binary]==3.2.3",
+    "pydantic==2.10.4",
+    "python-dotenv==1.0.1",
+    "sqlalchemy==2.0.37",
+    "uvicorn==0.34.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy==1.14.1",
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "ruff==0.8.6",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unused_configs = true
+exclude = "(^alembic/)"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+testpaths = ["tests"]
