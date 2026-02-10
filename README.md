@@ -15,6 +15,10 @@ This repository uses the following for day-to-day development:
 - Run application processes directly on host with `uv run` (API, worker, tests).
 - Do not default to full app-in-container workflow for inner-loop development.
 
+### Configuration split
+- `.env.example` contains secrets and runtime wiring values.
+- `runtime-config.example.yaml` contains non-secret runtime defaults and policy-style settings.
+
 ### Install dependencies
 ```bash
 uv sync --dev
@@ -57,8 +61,8 @@ Use these steps on a machine where a browser is available.
    - `PEERINGDB_CLIENT_ID`
    - `PEERINGDB_CLIENT_SECRET`
    - `PEERINGDB_REDIRECT_URI`
-   - `PEERINGDB_SCOPES` (must include `openid` for nonce-validated OIDC callbacks)
    - `APP_SECRET_KEY`
+   - Keep `peeringdb.scopes` in your runtime YAML profile including `openid` for nonce-validated OIDC callbacks.
 3. Start local dependencies and apply schema:
    ```bash
    docker compose up -d postgres redis
@@ -92,21 +96,25 @@ Use these steps on a machine where a browser is available.
 ## Route Server Setup (Sub-phase 5B)
 
 Sub-phase 5B writes deterministic per-request BIRD peer snippets to every host listed in
-`ROUTE_SERVER_HOSTS` over SSH. Repeat the steps below for each route server in that list.
+`route_servers.hosts` over SSH. Repeat the steps below for each route server in that list.
 
-### 1) Controller-side env config
-Set these variables in `.env` on the API/worker host:
+### 1) Controller-side runtime config profile
+Keep route-server non-secret settings in a runtime config profile (example below and
+in `runtime-config.example.yaml`), then map them to environment variables in your
+deployment workflow.
 
-```bash
-ROUTE_SERVER_HOSTS=rs1.example.net,rs2.example.net
-ROUTE_SERVER_SSH_USER=ztixsync
-ROUTE_SERVER_SSH_PORT=22
-ROUTE_SERVER_SSH_PRIVATE_KEY_PATH=/etc/zt-ix/keys/route_server_ed25519
-ROUTE_SERVER_SSH_CONNECT_TIMEOUT_SECONDS=10.0
-ROUTE_SERVER_SSH_STRICT_HOST_KEY=true
-ROUTE_SERVER_SSH_KNOWN_HOSTS_FILE=/etc/zt-ix/known_hosts
-ROUTE_SERVER_REMOTE_CONFIG_DIR=/etc/bird/ztix-peers.d
-ROUTE_SERVER_LOCAL_ASN=65000
+```yaml
+route_servers:
+  hosts: [rs1.example.net, rs2.example.net]
+  ssh:
+    user: ztixsync
+    port: 22
+    private_key_path: /etc/zt-ix/keys/route_server_ed25519
+    connect_timeout_seconds: 10.0
+    strict_host_key: true
+    known_hosts_file: /etc/zt-ix/known_hosts
+  remote_config_dir: /etc/bird/ztix-peers.d
+  local_asn: 65000
 ```
 
 ### 2) Packages to install on each router
@@ -133,7 +141,7 @@ sudo install -o ztixsync -g ztixsync -m 700 -d /home/ztixsync/.ssh
 ```
 
 Add the controller public key to `/home/ztixsync/.ssh/authorized_keys`, then ensure
-`ROUTE_SERVER_SSH_USER` and `ROUTE_SERVER_SSH_PRIVATE_KEY_PATH` match.
+`route_servers.ssh.user` and `route_servers.ssh.private_key_path` match.
 
 ### 4) Include generated snippets from `bird.conf`
 In each router’s `/etc/bird/bird.conf`, add include lines for generated peers and ROA tables:

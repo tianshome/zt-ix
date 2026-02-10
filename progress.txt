@@ -697,3 +697,34 @@ Next
 
 Known bugs / regressions
 1. None identified in local lint/type/tests for Sub-phase 5B scope.
+
+---
+
+Update: 2026-02-10 (Config split cleanup: `.env.example` vs YAML example)
+
+Decision
+1. Split example configuration by concern:
+   - `.env.example` now focuses on secrets/runtime wiring values.
+   - `runtime-config.example.yaml` now contains non-secret runtime/policy-style settings that were previously listed in `.env.example`.
+
+Completed
+1. Cleaned up `.env.example`:
+   - Removed non-secret policy/default settings moved to YAML example.
+   - Removed unused `PEERINGDB_API_BASE_URL` placeholder that was not consumed in code.
+2. Added `runtime-config.example.yaml`:
+   - Added example values for session defaults, OAuth/profile endpoints, local-auth tuning, provider base URLs, and route-server SSH/config settings.
+3. Updated `README.md`:
+   - Documented config split (`.env.example` vs `runtime-config.example.yaml`).
+   - Updated route-server setup section to show YAML profile-style config instead of `.env` block.
+
+In progress
+1. No active implementation tasks.
+
+Next
+1. If desired, implement runtime YAML ingestion and env-override precedence in `app/config.py` so the YAML profile can be consumed directly by the app.
+
+Known bugs / regressions
+1. None identified in this docs/config-template cleanup scope.
+
+Notes
+1. `docker-compose.yml` did not require changes because it only defines PostgreSQL/Redis service containers and does not consume the moved app-level settings.

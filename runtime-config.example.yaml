@@ -1,0 +1,41 @@
+# Non-secret runtime configuration example.
+# Keep secrets in environment variables (`.env`) or a secret manager.
+
+session:
+  cookie_name: zt_ix_session
+  cookie_max_age_seconds: 28800
+
+auth:
+  oauth_state_ttl_seconds: 600
+  local_auth:
+    password_min_length: 12
+    pbkdf2_iterations: 390000
+
+peeringdb:
+  scopes:
+    - openid
+    - profile
+    - email
+    - networks
+  http_timeout_seconds: 10.0
+  authorization_url: https://auth.peeringdb.com/oauth2/authorize/
+  token_url: https://auth.peeringdb.com/oauth2/token/
+  profile_url: https://auth.peeringdb.com/profile/v1
+
+zerotier:
+  central:
+    base_url: https://api.zerotier.com/api/v1
+  self_hosted_controller:
+    base_url: http://127.0.0.1:9993/controller
+
+route_servers:
+  hosts: []
+  ssh:
+    user: root
+    port: 22
+    private_key_path: ""
+    connect_timeout_seconds: 10.0
+    strict_host_key: true
+    known_hosts_file: ""
+  remote_config_dir: /etc/bird/ztix-peers.d
+  local_asn: 65000
