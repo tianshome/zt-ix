@@ -7,11 +7,13 @@ ZT-IX control plane for virtual Internet Exchange onboarding with PeeringDB iden
 ### Prerequisites
 - Python `3.13.x`
 - `uv` package manager
-- Docker Engine + Docker Compose plugin (for local PostgreSQL/Redis only)
+- Docker Engine + Docker Compose plugin (for local PostgreSQL/Redis and self-hosted ZeroTier controller runtime validation)
 
 ### Local dependency profile
 This repository uses the following for day-to-day development:
-- Run infrastructure dependencies (PostgreSQL + Redis) with Docker Compose.
+- Run infrastructure dependencies with Docker Compose:
+  - PostgreSQL + Redis for baseline API/worker workflows.
+  - `zerotier-controller` when validating self-hosted provider/lifecycle behavior.
 - Run application processes directly on host with `uv run` (API, worker, tests).
 - Do not default to full app-in-container workflow for inner-loop development.
 
@@ -32,10 +34,33 @@ uv sync --dev
 
 ### Start local dependencies
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres redis zerotier-controller
 ```
 
 PostgreSQL is exposed on host port `5433` to avoid conflicts with existing/production services on `5432`.
+
+### Bootstrap self-hosted controller auth token (Step 8.0)
+After `zerotier-controller` starts, source the controller API token from
+`/var/lib/zerotier-one/authtoken.secret` (or inject the same token from your secret manager).
+The compose service uses the pinned image tag `zerotier/zerotier:1.14.2`.
+The repo-managed `docker/zerotier/local.conf` sets:
+- `settings.allowManagementFrom = ["0.0.0.0/0"]`
+so host-side management API probes to `127.0.0.1:9993` are accepted.
+
+```bash
+export ZT_CONTROLLER_AUTH_TOKEN="$(docker compose exec -T zerotier-controller cat /var/lib/zerotier-one/authtoken.secret | tr -d '\r\n')"
+```
+
+### Validate controller API reachability
+```bash
+curl -fsS -H "X-ZT1-Auth: ${ZT_CONTROLLER_AUTH_TOKEN}" http://127.0.0.1:9993/status
+curl -fsS -H "X-ZT1-Auth: ${ZT_CONTROLLER_AUTH_TOKEN}" http://127.0.0.1:9993/controller
+curl -fsS -H "X-ZT1-Auth: ${ZT_CONTROLLER_AUTH_TOKEN}" http://127.0.0.1:9993/controller/network
+
+docker compose exec -T zerotier-controller sh -lc \
+'TOKEN="$(cat /var/lib/zerotier-one/authtoken.secret)"; \
+curl -fsS -H "X-ZT1-Auth: ${TOKEN}" http://127.0.0.1:9993/status'
+```
 
 ### Start the API
 ```bash

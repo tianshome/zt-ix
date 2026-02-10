@@ -13,3 +13,10 @@
 - Example (good vs bad):
   - Good: `filter ztix_roa_guard_v4 { ... }` plus `ipv4 { import filter ztix_roa_guard_v4; ... };`.
   - Bad: `function ztix_roa_guard_v4() { ... }` with top-level `import filter ...` directly under protocol.
+
+- Symptom: Host-side authenticated probes to ZeroTier local controller API (`/status`, `/controller`) returned `401`, while in-container probes returned `200`.
+- Root cause: ZeroTier management API allowlist defaults did not include host-originated requests from Docker bridge/NAT path; container-local loopback requests still passed.
+- Rule to prevent recurrence: In compose-based controller runtime, mount a managed `local.conf` with `settings.allowManagementFrom` set appropriately (current repo baseline: `["0.0.0.0/0"]`) and keep API port binding restricted to `127.0.0.1` on host.
+- Example (good vs bad):
+  - Good: `docker/zerotier/local.conf` mounted to `/var/lib/zerotier-one/local.conf` with `allowManagementFrom` configured, then host probe `curl -H "X-ZT1-Auth: ${ZT_CONTROLLER_AUTH_TOKEN}" http://127.0.0.1:9993/status` returns `200`.
+  - Bad: No explicit `allowManagementFrom` config -> host probe returns `401` while `docker compose exec ... curl http://127.0.0.1:9993/status` still returns `200`.

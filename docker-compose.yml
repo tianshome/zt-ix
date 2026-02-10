@@ -25,5 +25,25 @@ services:
       timeout: 3s
       retries: 10
 
+  zerotier-controller:
+    image: zerotier/zerotier:1.14.2
+    ports:
+      - "127.0.0.1:9993:9993/tcp"
+      - "9993:9993/udp"
+    volumes:
+      - zt_ix_zerotier_controller_data:/var/lib/zerotier-one
+      - ./docker/zerotier/local.conf:/var/lib/zerotier-one/local.conf
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /var/lib/zerotier-one/authtoken.secret"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 volumes:
   zt_ix_postgres_data:
+  zt_ix_zerotier_controller_data:

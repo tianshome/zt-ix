@@ -908,13 +908,13 @@ Known bugs / regressions
 Update: 2026-02-10 (Phase 8 plan expanded for containerized ZeroTier controller runtime + validation)
 
 Decision
-1. Phase 8 now explicitly includes a prerequisite container-runtime step for `zerotier/zerotier:latest` on port `9993` so lifecycle ownership work is validated in the same compose stack as PostgreSQL and Redis.
+1. Phase 8 now explicitly includes a prerequisite container-runtime step for `zerotier/zerotier:1.14.2` on port `9993` so lifecycle ownership work is validated in the same compose stack as PostgreSQL and Redis.
 
 Completed
 1. Updated `IMPLEMENTATION_PLAN.md` to Version `1.3`:
    - Added Step `8.0` for containerized controller runtime wiring.
    - Captured required runtime details for compose-based operation:
-     - `zerotier/zerotier:latest` service definition target,
+     - `zerotier/zerotier:1.14.2` service definition target,
      - persistent `/var/lib/zerotier-one` volume,
      - `127.0.0.1:9993/tcp` API and `9993/udp` transport exposure,
      - token bootstrap path (`/var/lib/zerotier-one/authtoken.secret`) for `ZT_CONTROLLER_AUTH_TOKEN`.
@@ -928,6 +928,101 @@ Next
 1. Implement Phase 8 Step `8.0` in infrastructure/docs (`docker-compose.yml`, `.env.example`, `README.md`) so controller runtime bootstrap is executable.
 2. Implement Phase 8 Step `8.1` readiness gate behavior in API/worker provisioning paths.
 3. Add lifecycle tests and manual drill checklist items in Phase 8 Step `8.5` once runtime + readiness implementation exists.
+
+Known bugs / regressions
+1. None identified for this documentation-only update.
+
+---
+
+Update: 2026-02-10 (Phase 8 Step 8.0 implemented with pinned controller tag + token consistency validation)
+
+Completed
+1. Implemented Phase 8 Step 8.0 container runtime wiring:
+   - Added `zerotier-controller` service to `docker-compose.yml` using `zerotier/zerotier:1.14.2`.
+   - Added persistent named volume `zt_ix_zerotier_controller_data` mounted at `/var/lib/zerotier-one`.
+   - Exposed controller API on `127.0.0.1:9993/tcp` and controller transport on `9993/udp`.
+   - Added required runtime capabilities/devices for controller operation (`/dev/net/tun`, `NET_ADMIN`, `SYS_ADMIN`).
+2. Updated docs/config references for pinned image and token bootstrap:
+   - `.env.example`
+   - `README.md`
+   - `TECH_STACK.md`
+   - `IMPLEMENTATION_PLAN.md`
+3. Validated controller token consistency:
+   - `authtoken.secret` stable across repeated reads.
+   - Token hash matches across host-exec and in-container reads.
+   - Authenticated in-container `/status` probe succeeds with HTTP 200.
+
+Verification
+1. `POSTGRES_HOST_PORT=55433 docker compose up -d postgres redis zerotier-controller` passed.
+2. `POSTGRES_HOST_PORT=55433 docker compose ps postgres redis zerotier-controller` shows all three services healthy/running.
+3. `POSTGRES_HOST_PORT=55433 docker compose exec -T zerotier-controller sh -lc 'TOKEN="$(cat /var/lib/zerotier-one/authtoken.secret)"; curl -fsS -H "X-ZT1-Auth: ${TOKEN}" http://127.0.0.1:9993/status'` passed (HTTP 200 + JSON status payload).
+4. Host-side `/status` probe with the same token currently returns `401` in this environment.
+
+In progress
+1. Phase 8 Step 8.1 to Step 8.5 not implemented yet.
+
+Next
+1. Implement Phase 8 Step 8.1 readiness gate in API/worker provisioning path.
+2. Implement Phase 8 Step 8.2 network reconciliation.
+3. Implement Phase 8 Step 8.3 token lifecycle controls.
+
+Known bugs / regressions
+1. Host-side `curl http://127.0.0.1:9993/status` currently returns `401` in this compose bridge topology even when token material is consistent; in-container probe is reliable.
+
+---
+
+Update: 2026-02-10 (Phase 8 Step 8.0 host-side management reachability fixed)
+
+Decision
+1. Fixed host-side controller API `401` by explicitly configuring ZeroTier management allowlist in `local.conf`:
+   - `settings.allowManagementFrom = ["0.0.0.0/0"]`
+2. Kept API binding restricted to host loopback (`127.0.0.1:9993/tcp`) in compose to avoid widening external exposure.
+
+Completed
+1. Added repository-managed ZeroTier controller config file:
+   - `docker/zerotier/local.conf`
+2. Updated compose runtime wiring:
+   - mounted `./docker/zerotier/local.conf` into `/var/lib/zerotier-one/local.conf` for `zerotier-controller`.
+3. Updated Step 8.0 documentation/checklist state:
+   - `README.md` now documents managed `allowManagementFrom` behavior and host-side verification commands.
+   - `IMPLEMENTATION_PLAN.md` bumped to `Version: 1.5`, added Step 8.0 behavior for `local.conf`, and marked host-side `/status`, `/controller`, and `/controller/network` checks complete.
+4. Resolved prior known bug:
+   - host-side authenticated controller probes now return `200`.
+
+Verification
+1. `POSTGRES_HOST_PORT=55433 docker compose exec -T zerotier-controller sh -lc 'set -eu; t=$(cat /var/lib/zerotier-one/authtoken.secret | tr -d "\\r\\n"); code=$(curl -sS -o /tmp/in_status.json -w "%{http_code}" -H "X-ZT1-Auth: $t" http://127.0.0.1:9993/status || true); echo in_container_status_code=$code'` passed (`200`).
+2. `POSTGRES_HOST_PORT=55433 docker compose restart zerotier-controller && POSTGRES_HOST_PORT=55433 docker compose ps zerotier-controller` passed (healthy after restart).
+3. Host probes with token read from container secret:
+   - `/status` returned `200`.
+   - `/controller` returned `200`.
+   - `/controller/network` returned `200`.
+
+In progress
+1. Phase 8 Step 8.1 to Step 8.5 remain open.
+
+Next
+1. Implement Phase 8 Step 8.1 readiness gate in API/worker provisioning path.
+2. Implement Phase 8 Step 8.2 network reconciliation.
+3. Implement Phase 8 Step 8.3 token lifecycle controls.
+
+Known bugs / regressions
+1. No known regressions in current Step 8.0 scope after host-side fix.
+
+---
+
+Update: 2026-02-10 (Lessons update for Step 8.0 host-side 401 root cause)
+
+Completed
+1. Updated `lessons.md` with a new operational lesson for ZeroTier controller management reachability:
+   - symptom: host-side `/status` and `/controller` return `401` while in-container probe returns `200`,
+   - root cause: missing/insufficient `allowManagementFrom` coverage for host-originated management path,
+   - prevention rule: mount managed `local.conf` and keep host API binding on loopback.
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Continue Phase 8 Step 8.1 readiness gate implementation.
 
 Known bugs / regressions
 1. None identified for this documentation-only update.

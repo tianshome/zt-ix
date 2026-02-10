@@ -56,6 +56,7 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 2. Docker Compose is used for stateful dependencies only:
    - PostgreSQL 16.6
    - Redis 7.4.1
+   - ZeroTier controller runtime for lifecycle validation: `zerotier/zerotier:1.14.2`
 3. Application processes run directly with `uv run` (API server, worker, and tests), not inside Docker by default.
 4. Full-container application runtime is reserved for parity checks and release validation, not the default inner-loop workflow.
 
