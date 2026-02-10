@@ -728,3 +728,69 @@ Known bugs / regressions
 
 Notes
 1. `docker-compose.yml` did not require changes because it only defines PostgreSQL/Redis service containers and does not consume the moved app-level settings.
+
+---
+
+Update: 2026-02-10 (Owned self-hosted controller lifecycle required by plan/docs)
+
+Decision
+1. Repository scope is now documented to own self-hosted ZeroTier controller lifecycle for release environments.
+2. `ZT_PROVIDER=self_hosted_controller` is now the documented release expectation; `central` is retained as compatibility-only for migration/testing and is not a release gate.
+
+Completed
+1. Updated `IMPLEMENTATION_PLAN.md` to Version 1.0:
+   - Added Sub-phase 5D for owned controller lifecycle implementation.
+   - Added checklist steps for bootstrap/readiness, network reconciliation, token lifecycle, backup/restore, and lifecycle integration tests.
+   - Added self-hosted-only release gates in Phase 5 and Phase 8.
+2. Updated product and architecture docs for scope alignment:
+   - `PRD.md` to Version 0.5 with new lifecycle ownership feature/acceptance criteria.
+   - `APP_FLOW.md` to Version 0.5 with lifecycle preflight/operations flow and provisioning gate semantics.
+   - `BACKEND_STRUCTURE.md` to Version 0.5 with lifecycle ownership backend contract and planned lifecycle env variables.
+   - `TECH_STACK.md` to Version 0.5 with self-hosted release path and central compatibility-only constraints.
+3. Updated operator/runtime documentation:
+   - `README.md` to clarify self-hosted lifecycle ownership scope and release expectation.
+   - `.env.example` defaulted to `ZT_PROVIDER=self_hosted_controller` and expanded controller runtime values.
+   - `runtime-config.example.yaml` updated with self-hosted provider default and lifecycle policy placeholders.
+
+In progress
+1. No implementation code changes in this update; this is a source-of-truth documentation alignment pass.
+
+Next
+1. Implement `IMPLEMENTATION_PLAN.md` Sub-phase 5C (`5.12` to `5.14`) for route-server apply/convergence.
+2. Implement Sub-phase 5D (`5.15` to `5.19`) for owned self-hosted controller lifecycle controls.
+3. Add lifecycle test suite (`tests/controller_lifecycle`) and wire release readiness checks for self-hosted-only staging and DR drill sign-off.
+
+Known bugs / regressions
+1. None identified for this documentation-only update.
+
+---
+
+Update: 2026-02-10 (Phase 5 sub-phases promoted to standalone phases)
+
+Decision
+1. Reorganized `IMPLEMENTATION_PLAN.md` so each former Phase 5 sub-phase is now a standalone phase to reduce section nesting and improve checklist readability.
+
+Completed
+1. Updated `IMPLEMENTATION_PLAN.md` to Version 1.1:
+   - Split former Phase 5 sub-phases into standalone phases:
+     - Phase 5: Provider Foundation and Membership Provisioning
+     - Phase 6: Route Server Desired Config Generation
+     - Phase 7: Route Server Apply and Convergence
+     - Phase 8: Self-Hosted Controller Lifecycle Ownership
+   - Renumbered later phases to keep linear progression:
+     - Frontend Hardening -> Phase 9
+     - Security and Observability -> Phase 10
+     - Release Readiness -> Phase 11
+     - Route Server Option B TODO -> Phase 12
+   - Renumbered affected step IDs and blocker references to match new phase layout.
+   - Updated status snapshot and traceability references for the new phase structure.
+
+In progress
+1. No implementation code changes; documentation reorganization is complete.
+
+Next
+1. Execute Phase 7 Step 7.1 to Step 7.3 for route-server apply/convergence.
+2. Execute Phase 8 Step 8.1 to Step 8.5 for self-hosted controller lifecycle ownership.
+
+Known bugs / regressions
+1. None identified for this documentation-only update.

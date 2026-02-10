@@ -1,6 +1,6 @@
 # ZT Internet Exchange
 
-ZeroTier controller for virtual Internet Exchange onboarding with PeeringDB identity.
+ZT-IX control plane for virtual Internet Exchange onboarding with PeeringDB identity and owned self-hosted ZeroTier controller lifecycle operations.
 
 ## Phase 1 Bootstrap
 
@@ -18,6 +18,12 @@ This repository uses the following for day-to-day development:
 ### Configuration split
 - `.env.example` contains secrets and runtime wiring values.
 - `runtime-config.example.yaml` contains non-secret runtime defaults and policy-style settings.
+- Release profile expectation: `ZT_PROVIDER=self_hosted_controller`.
+- `ZT_PROVIDER=central` remains compatibility-only for migration/testing and is not a release gate.
+
+### Self-hosted controller lifecycle scope
+- Required for release: controller readiness/bootstrap checks, managed-network reconciliation, token lifecycle controls, and backup/restore validation workflows.
+- Current implementation status is tracked in `IMPLEMENTATION_PLAN.md` (Sub-phase 5D).
 
 ### Install dependencies
 ```bash
@@ -122,7 +128,7 @@ Ubuntu/Debian example:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y bird2 openssh-server cron ca-certificates curl
+sudo apt-get install -y bird3 openssh-server cron ca-certificates curl
 ```
 
 Optional (for local RPKI validator/runtime):

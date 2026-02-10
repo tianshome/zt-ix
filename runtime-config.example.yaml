@@ -23,19 +23,26 @@ peeringdb:
   profile_url: https://auth.peeringdb.com/profile/v1
 
 zerotier:
+  provider: self_hosted_controller
   central:
+    # Compatibility-only mode (migration/testing), not release baseline.
     base_url: https://api.zerotier.com/api/v1
   self_hosted_controller:
     base_url: http://127.0.0.1:9993/controller
+    lifecycle:
+      readiness_strict: true
+      required_network_ids: []
+      backup_dir: /var/backups/zt-ix-controller
+      backup_retention_count: 14
 
 route_servers:
-  hosts: []
+  hosts: [rs1.example.net, rs2.example.net]
   ssh:
-    user: root
+    user: ztixsync
     port: 22
-    private_key_path: ""
+    private_key_path: /etc/zt-ix/keys/route_server_ed25519
     connect_timeout_seconds: 10.0
     strict_host_key: true
-    known_hosts_file: ""
+    known_hosts_file: /etc/zt-ix/known_hosts
   remote_config_dir: /etc/bird/ztix-peers.d
   local_asn: 65000

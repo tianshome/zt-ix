@@ -1,5 +1,5 @@
 # Technical Stack
-Version: 0.4
+Version: 0.5
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
@@ -49,6 +49,7 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 3. Docker Compose v2.32.1
 4. OpenSSH client (`ssh`) for route-server fanout workflows
 5. BIRD 3.x for route-server config syntax validation and runtime
+6. ZeroTier One service/controller runtime (owned self-hosted controller lifecycle path via local controller API)
 
 ## 9.1 Local Development Dependency Profile
 1. Selected profile: infrastructure-only containers.
@@ -69,14 +70,15 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
    - `email`
    - `networks`
 3. PeeringDB REST data API base URL: `https://www.peeringdb.com/api/`
-4. ZeroTier Central API:
-   - Base URL: `https://api.zerotier.com/api/v1`
-   - Auth header format: `Authorization: token <token>`
-5. ZeroTier self-hosted controller API:
+4. ZeroTier self-hosted controller API (required release path):
    - Base URL: `http://127.0.0.1:9993/controller`
    - Auth header: `X-ZT1-Auth: <token>`
+5. ZeroTier Central API (compatibility-only migration/testing path):
+   - Base URL: `https://api.zerotier.com/api/v1`
+   - Auth header format: `Authorization: token <token>`
 6. Provisioning mode is configuration-driven:
    - `ZT_PROVIDER=central|self_hosted_controller`
+   - Release expectation: `ZT_PROVIDER=self_hosted_controller`
 7. Authentication mode support:
    - Auth Option A: local DB-backed username/password credentials + server CLI account provisioning
    - Auth Option B: PeeringDB OAuth/OIDC
@@ -87,6 +89,8 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 3. PeeringDB OAuth app registration must use signing algorithm `RSA with SHA-2 256` (RS256) for the OIDC callback flow validated by this project.
 4. Provider-specific behavior differences are isolated behind the contract defined in `BACKEND_STRUCTURE.md`.
 5. Local auth is first-party only and must enforce normalized usernames, deterministic failures, and non-plaintext password storage.
+6. Owned self-hosted controller lifecycle paths must fail closed when controller readiness/auth checks fail.
+7. Release profiles must not require ZeroTier Central credentials; `ZT_CENTRAL_API_TOKEN` is compatibility-only.
 
 ## 12. Version Pinning Policy
 1. All Python dependencies must be pinned in `pyproject.toml` and lockfile (`uv.lock`) to exact versions above.

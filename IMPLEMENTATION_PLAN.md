@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 0.9
+Version: 1.1
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -9,27 +9,31 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - `[ ]` open and not yet implemented.
 - `[ ]` + `Blocked by` + `Reason` marks an explicitly blocked gap that must be revisited when the dependency is complete.
 
-## 0.1 Current Status Snapshot (through Phase 5B)
+## 0.1 Current Status Snapshot (through Phase 6 + planning update for Phase 8)
 - [x] Phase 1 bootstrap is complete.
 - [x] Phase 2 data/migration foundation is complete.
 - [x] Phase 3 auth integration (Auth Option A + Auth Option B) is complete for automated coverage.
 - [x] Phase 4 backend request workflow is complete for API + JSON route responses.
-- [x] Phase 5 Sub-phase 5A provider foundation is complete (Step 5.1 to Step 5.8).
-- [x] Phase 5 Sub-phase 5B route-server desired config generation is complete (Step 5.9 to Step 5.11).
+- [x] Phase 5 provider foundation and membership provisioning is complete (Step 5.1 to Step 5.8).
+- [x] Phase 6 route-server desired config generation is complete (Step 6.1 to Step 6.3).
 - [ ] Configurable auto-approval mode is planned but not implemented.
   - Blocked by: Phase 4 Step 4.7.
   - Reason: approval-mode policy evaluator behavior and guardrails are not implemented yet.
 - [x] Queue placeholder has been replaced with real async dispatch.
 - [ ] UI/template integration for onboarding/dashboard/request/admin flows.
-  - Blocked by: Phase 6 Step 6.1 to Step 6.4.
+  - Blocked by: Phase 9 Step 9.1 to Step 9.4.
   - Reason: current accepted scope uses JSON responses; frontend component/styling integration is deferred by plan.
 - [ ] Route-server integration (Route Server Option A).
-  - Blocked by: Phase 5 Sub-phase 5C implementation.
+  - Blocked by: Phase 7 implementation.
   - Reason: route-server apply/convergence logic has not been implemented yet.
+- [ ] Self-hosted controller lifecycle ownership.
+  - Blocked by: Phase 8 implementation.
+  - Reason: bootstrap, network reconciliation, token lifecycle, and backup/restore flows are not implemented yet.
 
 ## 1. Planning Assumptions and Open Questions
 - [x] Assumption: manual admin approval is the default decision control.
 - [x] Assumption: provider mode is selected by `ZT_PROVIDER` and cannot be switched per-request.
+- [x] Assumption: release environments run `ZT_PROVIDER=self_hosted_controller`; `central` remains compatibility-only for migration/testing and is not a release gate.
 - [x] Assumption: local development uses Docker Compose for PostgreSQL/Redis and `uv run` for API/worker/tests.
 - [x] Assumption: authentication planning uses Auth Option A (local credentials) and Auth Option B (PeeringDB OAuth).
 - [x] Assumption: route-server automation in this plan follows Route Server Option A (worker-driven SSH orchestration).
@@ -38,6 +42,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] Requirement: policy auto-approval is a configurable option, with manual admin approval remaining the default mode.
 - [ ] Open question: exact auto-approval policy guardrails (eligibility checks, fallback behavior, and rate-limit posture) still need product/security sign-off.
 - [ ] Open question: target retry limits/backoff constants should be finalized before phase 5 implementation.
+- [ ] Open question: self-hosted controller runtime topology (single-node vs HA pair) for v0.1.0 should be finalized before Phase 8 implementation starts.
 - [x] Open question resolved: for Auth Option A, empty associated-network assignment means unrestricted access when no rows exist.
 
 ## 1.1 Option Labels (Disambiguation)
@@ -56,11 +61,12 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] PRD `F1` maps to phase 3.
 - [x] PRD `F2` maps to phases 3 and 4.
 - [x] PRD `F3` and `F5` map to phase 4.
-- [x] PRD `F4` maps to phase 5.
-- [x] PRD `F6` and `F7` map to phases 3, 4, 5, and 7.
-- [x] Frontend UX/accessibility requirements map to phase 6.
-- [x] Release and operational requirements map to phase 8.
-- [x] Route-server orchestration extension (Route Server Option A) maps to phase 5 and phase 8 validation.
+- [x] PRD `F4` maps to phases 5, 6, and 7.
+- [x] PRD `F9` maps to phase 8 and phase 11 release gates.
+- [x] PRD `F6` and `F7` map to phases 3, 4, 5, 6, 7, 8, and 10.
+- [x] Frontend UX/accessibility requirements map to phase 9.
+- [x] Release and operational requirements map to phase 11.
+- [x] Route-server orchestration extension (Route Server Option A) maps to phases 6, 7, and 11 validation.
 
 ## 3. Phase 1: Project Bootstrap
 Implements: foundational requirements for all PRD features.
@@ -152,7 +158,7 @@ Steps:
 - [x] Queueing placeholder retained for defer-to-phase-5 behavior (`_enqueue_provisioning_attempt`).
 - [x] Replace queueing placeholder with real Celery task dispatch.
 - [ ] Integrate rendered UI/templates for workflow pages (Jinja2/HTMX/Alpine).
-  - Blocked by: Phase 6 Step 6.1 to Step 6.4.
+  - Blocked by: Phase 9 Step 9.1 to Step 9.4.
   - Reason: JSON responses are accepted for the current state; frontend integration is intentionally deferred.
 
 Exit criteria:
@@ -163,7 +169,7 @@ Exit criteria:
   - Reason: policy evaluation path is not implemented yet.
 - [x] Admin approval/retry triggers async provisioning dispatch.
 - [ ] Operator/admin rendered UI pages match frontend guidelines.
-  - Blocked by: Phase 6 Step 6.1 to Step 6.4.
+  - Blocked by: Phase 9 Step 9.1 to Step 9.4.
   - Reason: template/UI layer not implemented yet.
 
 Verification:
@@ -173,14 +179,12 @@ Verification:
   - Blocked by: Step 4.7.
   - Reason: configurable approval-mode logic is not implemented yet.
 - [ ] Manual UI checks for rendered pages.
-  - Blocked by: Phase 6 UI implementation is not complete.
+  - Blocked by: Phase 9 UI implementation is not complete.
   - Reason: current routes are JSON responses by design.
 
-## 7. Phase 5: ZeroTier and Route Server Provisioning (Route Server Option A)
+## 7. Phase 5: Provider Foundation and Membership Provisioning
 Implements: PRD `F4`, `F5`, `F6`, `F7`.
-
-### 7.1 Sub-phase 5A: Provider Foundation and Membership Provisioning
-Goal: complete provider-agnostic ZeroTier member provisioning and request-state handling before any route-server actions.
+Goal: complete provider-agnostic ZeroTier member provisioning and request-state handling before route-server apply workflows.
 
 Steps:
 - [x] Step 5.1: Create provider-agnostic provisioning interface and normalized response model.
@@ -192,66 +196,127 @@ Steps:
 - [x] Step 5.7: Add failure handling and admin retry for provider/network/auth errors.
 - [x] Step 5.8: Add unit/integration tests for provider contract, adapter selection, and retry semantics.
 
-Self-contained outcomes:
+Exit criteria:
 - [x] Both provider modes pass shared contract tests.
 - [x] Re-running the same provisioning request does not duplicate membership rows.
 - [x] Provider failures produce actionable `failed` context with admin retry support.
 
-### 7.2 Sub-phase 5B: Route Server Desired Config Generation
-Goal: generate deterministic per-ASN route-server configuration only after membership authorization succeeds.
+Verification:
+- [x] `pytest tests/provisioning -q`
+- [ ] Manual checks:
+  - provider selection by `ZT_PROVIDER` (self-hosted path required for release)
+  - admin retry from `failed` state
+
+## 8. Phase 6: Route Server Desired Config Generation
+Implements: PRD `F4`, `F6`, `F8`.
+Goal: generate deterministic per-ASN route-server configuration after membership authorization succeeds.
 
 Steps:
-- [x] Step 5.9: Add route-server sync service that fans out to all configured remote route servers over SSH after successful ZeroTier member authorization.
-- [x] Step 5.10: Render explicit per-ASN BIRD peer snippets using ZeroTier-assigned endpoint addresses.
-- [x] Step 5.11: Enforce ROA/RPKI validation in generated BIRD configuration/policy path.
+- [x] Step 6.1: Add route-server sync service that fans out to all configured remote route servers over SSH after successful ZeroTier member authorization.
+- [x] Step 6.2: Render explicit per-ASN BIRD peer snippets using ZeroTier-assigned endpoint addresses.
+- [x] Step 6.3: Enforce ROA/RPKI validation in generated BIRD configuration/policy path.
 
-Self-contained outcomes:
+Exit criteria:
 - [x] Each approved ASN yields explicit generated BIRD peer config on every configured route server.
 - [x] Generated BIRD policy path used by route-server peers includes ROA/RPKI validation.
 
-### 7.3 Sub-phase 5C: Route Server Apply and Convergence
-Goal: safely apply generated BIRD config to all route servers and converge request state to `active` or `failed`.
-
-Steps:
-- [ ] Step 5.12: Apply BIRD updates safely on each route server (`bird -p`, `birdc configure check`, timed `birdc configure`, confirm/rollback workflow) and capture per-server outcomes.
-- [ ] Step 5.13: Transition request to `active` only if all configured route servers apply successfully; otherwise set `failed` with actionable error context and retry path.
-  - Blocked by: Step 5.12.
-  - Reason: convergence logic depends on per-server apply outcomes.
-- [ ] Step 5.14: Add tests for config rendering, SSH command orchestration, multi-route-server partial failures, and retry idempotency.
-  - Blocked by: Step 5.12 and Step 5.13.
-  - Reason: apply/convergence behavior must exist before full route-server failure-mode tests are final.
-
-Self-contained outcomes:
-- [ ] Request transitions to `active` only when all configured route servers succeed.
-- [ ] Partial route-server failures are captured with retry-safe behavior.
-
-Phase 5 overall exit criteria:
-- [x] Both provider modes pass shared contract tests.
-- [x] Re-running same provisioning request does not duplicate membership rows.
-- [x] Each approved ASN yields explicit generated BIRD peer config on every configured route server.
-- [x] BIRD route-server policy path used by generated peers includes ROA/RPKI validation.
-
 Verification:
-- [x] `pytest tests/provisioning -q`
 - [x] `pytest tests/route_servers -q`
 - [ ] Manual checks:
-  - provider selection by `ZT_PROVIDER`
-  - admin retry from `failed` state
   - explicit per-ASN peer config rendered and deployed on each route server
   - BIRD validation path confirms ROA/RPKI policy is enabled for generated peers
 
-## 8. Phase 6: Frontend Hardening
+## 9. Phase 7: Route Server Apply and Convergence
+Implements: PRD `F4`, `F6`, `F8`.
+Goal: safely apply generated BIRD config to all route servers and converge request state to `active` or `failed`.
+
+Steps:
+- [ ] Step 7.1: Apply BIRD updates safely on each route server (`bird -p`, `birdc configure check`, timed `birdc configure`, confirm/rollback workflow) and capture per-server outcomes.
+- [ ] Step 7.2: Transition request to `active` only if all configured route servers apply successfully; otherwise set `failed` with actionable error context and retry path.
+  - Blocked by: Step 7.1.
+  - Reason: convergence logic depends on per-server apply outcomes.
+- [ ] Step 7.3: Add tests for config rendering, SSH command orchestration, multi-route-server partial failures, and retry idempotency.
+  - Blocked by: Step 7.1 and Step 7.2.
+  - Reason: apply/convergence behavior must exist before full route-server failure-mode tests are final.
+
+Exit criteria:
+- [ ] Request transitions to `active` only when all configured route servers succeed.
+- [ ] Partial route-server failures are captured with retry-safe behavior.
+
+Verification:
+- [ ] `pytest tests/route_servers -q`
+  - Blocked by: Step 7.1 to Step 7.3.
+  - Reason: apply/convergence behavior is not implemented.
+- [ ] Manual checks:
+  - route-server apply succeeds across all configured servers for a provisioning attempt
+  - failed route-server apply captures actionable error context and supports retry idempotency
+
+## 10. Phase 8: Self-Hosted Controller Lifecycle Ownership
+Implements: PRD `F4`, `F6`, `F7`, `F9`.
+Goal: make the repository responsible for self-hosted controller lifecycle operations required for production ownership.
+
+Steps:
+- [ ] Step 8.1: Implement controller runtime bootstrap and readiness workflow.
+  - Minimum behaviors:
+    - verify controller API reachability/auth at startup,
+    - verify controller identity/state prerequisites,
+    - fail closed when lifecycle prerequisites are missing.
+- [ ] Step 8.2: Implement managed network bootstrap and reconciliation for owned controller mode.
+  - Minimum behaviors:
+    - create/ensure required ZeroTier network(s) on owned controller,
+    - reconcile expected network metadata before provisioning starts.
+  - Blocked by: Step 8.1.
+  - Reason: network lifecycle operations require validated controller runtime readiness.
+- [ ] Step 8.3: Implement controller auth token lifecycle controls.
+  - Minimum behaviors:
+    - rotate/reload controller auth credentials with deterministic failure handling,
+    - emit audit events for token lifecycle actions.
+  - Blocked by: Step 8.1.
+  - Reason: token lifecycle controls depend on owned-controller bootstrap contract.
+- [ ] Step 8.4: Implement controller state backup/restore workflows and verification drill.
+  - Minimum behaviors:
+    - scheduled backup artifact generation,
+    - documented restore path,
+    - post-restore validation checks before reopening provisioning.
+  - Blocked by: Step 8.1.
+  - Reason: backup/restore contract depends on settled controller runtime/state conventions.
+- [ ] Step 8.5: Add integration tests for owned lifecycle paths using a real self-hosted controller instance.
+  - Minimum coverage:
+    - bootstrap success/failure,
+    - managed network reconciliation,
+    - credential rotation behavior,
+    - backup/restore validation path.
+  - Blocked by: Step 8.1 to Step 8.4.
+  - Reason: lifecycle test targets do not exist until lifecycle implementation is complete.
+
+Exit criteria:
+- [ ] Startup and worker flows fail closed when owned-controller lifecycle prerequisites are unmet.
+- [ ] Required networks exist and reconcile on the owned controller before request provisioning.
+- [ ] Controller token lifecycle and backup/restore paths are auditable and test-backed.
+- [ ] Release profile behavior is validated without `ZT_CENTRAL_API_TOKEN` dependency.
+  - Blocked by: Phase 11 Step 11.5.
+  - Reason: release-gate validation is executed in staging during phase 11.
+
+Verification:
+- [ ] `pytest tests/controller_lifecycle -q`
+  - Blocked by: Step 8.1 to Step 8.5.
+  - Reason: lifecycle test suite does not exist yet.
+- [ ] Manual checks:
+  - owned-controller bootstrap/readiness checks pass before worker provisioning starts
+  - controller backup/restore drill revalidates provisioning readiness
+
+## 11. Phase 9: Frontend Hardening
 Implements: PRD UX clarity and accessibility requirements.
 
 Steps:
-- [ ] Step 6.1: Apply styles/components from `FRONTEND_GUIDELINES.md`.
-- [ ] Step 6.2: Implement responsive layout behavior for mobile and desktop.
-- [ ] Step 6.3: Add accessibility checks (keyboard, focus, contrast, non-color status cues).
-- [ ] Step 6.4: Add empty/error states for all critical screens.
+- [ ] Step 9.1: Apply styles/components from `FRONTEND_GUIDELINES.md`.
+- [ ] Step 9.2: Implement responsive layout behavior for mobile and desktop.
+- [ ] Step 9.3: Add accessibility checks (keyboard, focus, contrast, non-color status cues).
+- [ ] Step 9.4: Add empty/error states for all critical screens.
 
 Blocked items:
 - [ ] Integrate real UI for `/onboarding`, `/dashboard`, `/requests/:id`, `/admin/requests`, `/admin/requests/:id`.
-  - Blocked by: Phase 6 execution start.
+  - Blocked by: Phase 9 execution start.
   - Reason: current state intentionally accepts JSON responses; template/UI layer has not started.
 
 Exit criteria:
@@ -262,14 +327,14 @@ Verification:
 - [ ] Manual keyboard-only walkthrough of auth, onboarding, and admin review flows.
 - [ ] Automated accessibility check (if tooling is configured).
 
-## 9. Phase 7: Security and Observability
+## 12. Phase 10: Security and Observability
 Implements: PRD `F6`, `F7`.
 
 Steps:
-- [ ] Step 7.1: Add CSRF protections for all state-changing form actions.
-- [ ] Step 7.2: Add structured logging with request IDs and external correlation IDs.
-- [ ] Step 7.3: Add metrics for auth success/failure and provisioning latency.
-- [ ] Step 7.4: Add security checklist and secret management validation gates.
+- [ ] Step 10.1: Add CSRF protections for all state-changing form actions.
+- [ ] Step 10.2: Add structured logging with request IDs and external correlation IDs.
+- [ ] Step 10.3: Add metrics for auth success/failure and provisioning latency.
+- [ ] Step 10.4: Add security checklist and secret management validation gates.
 
 Exit criteria:
 - [ ] State-changing endpoints require CSRF validation.
@@ -279,41 +344,50 @@ Verification:
 - [ ] `pytest tests/security -q`
 - [ ] Manual negative test: CSRF-missing request rejected.
 
-## 10. Phase 8: Release Readiness
+## 13. Phase 11: Release Readiness
 Implements: PRD definition-of-done completion.
 
 Steps:
-- [ ] Step 8.1: Create deployment manifests and environment docs.
-- [ ] Step 8.2: Execute end-to-end staging test using sandbox credentials.
-- [ ] Step 8.3: Produce incident response and manual retry runbook (including route-server SSH/BIRD rollback procedures).
-- [ ] Step 8.4: Tag `v0.1.0` when PRD acceptance criteria are fully met.
+- [ ] Step 11.1: Create deployment manifests and environment docs.
+- [ ] Step 11.2: Execute end-to-end staging test using sandbox credentials.
+- [ ] Step 11.3: Produce incident response and manual retry runbook (including route-server SSH/BIRD rollback procedures).
+- [ ] Step 11.4: Tag `v0.1.0` when PRD acceptance criteria are fully met.
+- [ ] Step 11.5: Execute self-hosted-controller-only staging run (no Central credentials) including lifecycle preflight checks.
+  - Blocked by: Phase 8 Step 8.1 to Step 8.5.
+  - Reason: owned controller lifecycle controls must exist before self-hosted-only staging sign-off.
+- [ ] Step 11.6: Execute controller disaster-recovery drill (backup -> restore -> readiness verification -> provisioning resume).
+  - Blocked by: Step 11.5.
+  - Reason: DR drill sign-off depends on self-hosted-only staging baseline.
 
 Exit criteria:
 - [ ] Staging walkthrough covers operator, admin, and retry paths.
 - [ ] Runbook and deployment docs are reviewed and current.
+- [ ] Staging uses owned self-hosted controller lifecycle paths with no Central-token dependency.
+- [ ] Disaster-recovery drill is completed and recorded for release sign-off.
 
 Verification:
 - [ ] E2E staging checklist signed off.
 - [ ] Final regression test pass before release tag.
+- [ ] Self-hosted lifecycle checklist signed off (bootstrap, reconciliation, rotation, backup/restore).
 
-## 11. TODO: Phase 9 (Route Server Option B) - Persisted Route Server State Model
-Status: deferred until after Phase 8 completion.
+## 14. TODO: Phase 12 (Route Server Option B) - Persisted Route Server State Model
+Status: deferred until after Phase 11 completion.
 
 Steps:
-- [ ] Step 9.1: Add persistent route-server inventory and per-request per-server sync tables/migrations.
-  - Blocked by: Phase 8 completion.
+- [ ] Step 12.1: Add persistent route-server inventory and per-request per-server sync tables/migrations.
+  - Blocked by: Phase 11 completion.
   - Reason: Route Server Option B is explicitly out of active scope before release readiness.
-- [ ] Step 9.2: Split route-server fanout into one queue job per route server with isolated retries and backoff.
-  - Blocked by: Step 9.1.
+- [ ] Step 12.2: Split route-server fanout into one queue job per route server with isolated retries and backoff.
+  - Blocked by: Step 12.1.
   - Reason: per-server jobs require persisted route-server state model.
-- [ ] Step 9.3: Add reconciliation worker that compares desired state to BIRD effective state and repairs drift.
-  - Blocked by: Step 9.1 and Step 9.2.
+- [ ] Step 12.3: Add reconciliation worker that compares desired state to BIRD effective state and repairs drift.
+  - Blocked by: Step 12.1 and Step 12.2.
   - Reason: reconciliation requires persisted desired/effective per-server state and isolated jobs.
-- [ ] Step 9.4: Expose per-route-server sync state and last error in admin request detail views.
-  - Blocked by: Step 9.1.
+- [ ] Step 12.4: Expose per-route-server sync state and last error in admin request detail views.
+  - Blocked by: Step 12.1.
   - Reason: UI/API exposure depends on persisted state model.
-- [ ] Step 9.5: Add tests for partial-failure convergence and per-server retry safety.
-  - Blocked by: Step 9.1 to Step 9.4.
+- [ ] Step 12.5: Add tests for partial-failure convergence and per-server retry safety.
+  - Blocked by: Step 12.1 to Step 12.4.
   - Reason: test targets do not exist until the model/jobs/reconciliation are implemented.
 
 Exit criteria:

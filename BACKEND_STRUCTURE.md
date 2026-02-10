@@ -1,5 +1,5 @@
 # Backend Structure
-Version: 0.4
+Version: 0.5
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
@@ -10,8 +10,12 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
 3. Queue and worker: Celery + Redis for provisioning and reconciliation jobs.
 4. External systems:
    - PeeringDB OAuth endpoints and PeeringDB REST API.
-   - ZeroTier provisioning provider (`central` or `self_hosted_controller`).
-5. Authentication modes:
+   - ZeroTier provisioning provider (`self_hosted_controller` release path; `central` compatibility-only).
+5. Owned self-hosted controller lifecycle:
+   - controller runtime readiness/preflight gate,
+   - managed network bootstrap/reconciliation,
+   - credential lifecycle and backup/restore operational workflows.
+6. Authentication modes:
    - Auth Option A: local credentials stored in DB (`local_credential`) with `app_user` as canonical user profile.
    - Auth Option B: PeeringDB OAuth identities mapped onto canonical `app_user`.
 
@@ -25,6 +29,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
    - `pending`, `approved`, `provisioning`, `active`
 7. Request state transitions must follow `APP_FLOW.md`.
 8. `zt_membership` is one-to-one with `join_request` and unique per (`zt_network_id`, `node_id`).
+9. In self-hosted mode, provisioning must fail closed when controller lifecycle preflight is unhealthy.
 
 ## 3. Database Schema (PostgreSQL)
 ```sql
@@ -173,8 +178,8 @@ CREATE INDEX idx_user_network_access_user_id ON user_network_access(user_id);
 ## 5. ZeroTier Provisioning Provider Contract
 1. Workflow code depends on provider interface, not provider-specific endpoints.
 2. Supported provider modes:
-   - `central`: ZeroTier Central API (`Authorization: token <token>`)
-   - `self_hosted_controller`: local controller API (`X-ZT1-Auth: <token>`)
+   - `self_hosted_controller`: local controller API (`X-ZT1-Auth: <token>`) (required release mode)
+   - `central`: ZeroTier Central API (`Authorization: token <token>`) (compatibility-only)
 3. Minimum provider interface methods:
    - `validate_network(zt_network_id) -> bool`
    - `authorize_member(zt_network_id, node_id, asn, request_id) -> ProvisionResult`
@@ -186,7 +191,17 @@ CREATE INDEX idx_user_network_access_user_id ON user_network_access(user_id);
 5. Idempotency rule:
    - Calling `authorize_member` repeatedly for same request/node/network must converge on one persisted membership row.
 
-## 5.1 Route Server Option A Contract (Sub-phase 5B)
+## 5.2 Self-Hosted Controller Lifecycle Ownership Contract (Sub-phase 5D)
+1. Startup/worker preflight must verify controller API/auth readiness before provisioning execution.
+2. Required controller-managed networks must exist (create/reconcile) before member authorization attempts.
+3. Lifecycle operations must emit audit events for success/failure:
+   - readiness checks,
+   - credential/token lifecycle actions,
+   - backup and restore validation actions.
+4. Provisioning must remain blocked while lifecycle preflight is unhealthy.
+5. Release readiness requires self-hosted-only operation without Central credentials.
+
+## 5.3 Route Server Option A Contract (Sub-phase 5B)
 1. After successful member authorization, worker renders deterministic BIRD peer config from:
    - request ID
    - ASN
@@ -274,6 +289,8 @@ All API responses are JSON.
    - persist `last_error`
 5. Retry execution is explicit admin action for terminal `failed` records.
 6. Automatic retries for transient network/provider failures are allowed only within one worker attempt boundary and must be bounded.
+7. In `self_hosted_controller` mode, worker enforces lifecycle readiness preflight before provider calls.
+8. If lifecycle readiness checks fail, request transitions to `failed` with actionable lifecycle error context.
 
 ## 8. Storage and Secret Rules
 1. Provider secrets (Central API token or controller auth token) are never stored in plaintext DB rows.
@@ -282,8 +299,11 @@ All API responses are JSON.
 4. OAuth transient values (`state`, `nonce`, verifier) are short-lived and purged after use or expiry.
 5. PeeringDB access tokens are stored encrypted only when required for async behavior; otherwise kept in session context only.
 6. Local password material is stored only as non-reversible hashes and never logged.
+7. Controller lifecycle credential rotation events must be auditable and avoid plaintext secret logging.
+8. Backup artifacts for controller lifecycle workflows must be access-restricted and validated before use.
 
-## 9. Required Environment Variables
+## 9. Required Environment Variables (Current + Planned)
+Current implementation:
 1. `APP_SECRET_KEY`
 2. `DATABASE_URL`
 3. `REDIS_URL`
@@ -305,6 +325,12 @@ All API responses are JSON.
 19. `ROUTE_SERVER_REMOTE_CONFIG_DIR`
 20. `ROUTE_SERVER_LOCAL_ASN`
 
+Planned for Sub-phase 5D lifecycle ownership:
+21. `ZT_CONTROLLER_REQUIRED_NETWORK_IDS` (comma-separated required network IDs for readiness/reconciliation)
+22. `ZT_CONTROLLER_READINESS_STRICT` (`true|false`; strict fail-closed in release profiles)
+23. `ZT_CONTROLLER_BACKUP_DIR` (backup artifact destination path)
+24. `ZT_CONTROLLER_BACKUP_RETENTION_COUNT` (retention policy count for lifecycle backups)
+
 ## 10. Edge Cases
 1. Callback replay with used `state`: reject and audit.
 2. PeeringDB account with no eligible ASN: block request creation.
@@ -316,3 +342,4 @@ All API responses are JSON.
 8. Target ZeroTier network not found/inactive in configured provider: return failure with actionable admin guidance.
 9. Provisioning timeout or rate limit: preserve error context and enforce bounded retry behavior.
 10. Invalid provider mode or missing credentials: fail fast at startup with clear remediation logs.
+11. Self-hosted controller lifecycle preflight failure: block provisioning and return actionable lifecycle remediation context.

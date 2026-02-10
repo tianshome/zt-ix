@@ -1,5 +1,5 @@
 # Application Flow
-Version: 0.4
+Version: 0.5
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `FRONTEND_GUIDELINES.md`, `IMPLEMENTATION_PLAN.md`
@@ -102,39 +102,60 @@ Error branches:
 2. Missing reject reason: validation error, no mutation.
 3. Non-admin caller on admin route: authorization failure.
 
-## 6. Provisioning Flow
+## 6. Controller Lifecycle Preflight and Operations Flow (Owned Self-Hosted Mode)
+Trigger: API/worker startup and scheduled controller-operations jobs.
+
+Sequence:
+1. Service preflight verifies self-hosted controller API reachability and authentication.
+2. Service verifies required controller-managed network context and reconciles when missing/drifted.
+3. Decision point:
+   - Preflight success: provisioning queue consumption remains enabled.
+   - Preflight failure: fail closed for provisioning paths and surface actionable admin diagnostics.
+4. Controller lifecycle operations (scheduled or manually triggered by runbook):
+   - credential/token lifecycle actions,
+   - backup artifact creation/retention checks,
+   - restore validation drill before provisioning resume.
+5. Lifecycle actions emit audit events with actor/system metadata and outcome.
+
+Error branches:
+1. Controller auth/reachability failure: block provisioning and require remediation.
+2. Required controller network missing and reconciliation fails: block provisioning and surface failure context.
+3. Backup/restore validation failure: keep controller lifecycle in blocked state until validation passes.
+
+## 7. Provisioning Flow
 Trigger: request enters `approved`.
 
 Sequence:
 1. Worker dequeues job and atomically marks request `provisioning`.
-2. Worker resolves provider mode (`central` or `self_hosted_controller`).
-3. Worker calls provider adapter to authorize membership on target network.
-4. Worker renders deterministic per-ASN route-server BIRD peer snippets using assigned endpoint addresses.
-5. Worker fans out generated snippets over SSH to all configured route servers.
-6. Decision point:
+2. Worker resolves provider mode from `ZT_PROVIDER` (release environments require `self_hosted_controller`; `central` is compatibility-only).
+3. For self-hosted mode, worker enforces controller lifecycle readiness gate before provider calls.
+4. Worker calls provider adapter to authorize membership on target network.
+5. Worker renders deterministic per-ASN route-server BIRD peer snippets using assigned endpoint addresses.
+6. Worker fans out generated snippets over SSH to all configured route servers.
+7. Decision point:
    - Success: upsert membership data, set request `active`, emit audit events.
    - Failure: set request `failed`, increment retry metadata, emit audit event with error context.
-7. Operator/admin UIs reflect final status and error details permitted by role.
+8. Operator/admin UIs reflect final status and error details permitted by role.
 
 Failure handling:
 1. Transient provider/API failures may be retried by worker policy.
 2. Terminal failures remain `failed` until admin explicitly retries.
 3. Route-server SSH/sync failures are treated as provisioning failures with actionable details.
-4. Misconfiguration (invalid provider mode or missing credential) fails fast at startup and blocks worker processing.
+4. Misconfiguration (invalid provider mode, missing credential, or failed lifecycle preflight) fails fast and blocks worker processing.
 
-## 7. Admin Retry Flow
+## 8. Admin Retry Flow
 Trigger: admin clicks retry on a `failed` request.
 
 Sequence:
 1. API validates request is currently `failed`.
 2. API sets status back to `approved`.
 3. API enqueues provisioning task and writes retry audit event.
-4. Worker flow resumes at section 5.
+4. Worker flow resumes at section 7.
 
 Error branch:
 1. Retry attempted from non-`failed` state: conflict response with current status.
 
-## 8. Operator Return Flow
+## 9. Operator Return Flow
 Trigger: authenticated operator visits `/dashboard`.
 
 Sequence:
@@ -142,13 +163,13 @@ Sequence:
 2. Each row links to `/requests/:id`.
 3. If no active request exists for an eligible ASN/network pair, onboarding action is available.
 
-## 9. Route Guards
+## 10. Route Guards
 1. `/onboarding`, `/dashboard`, `/requests/:id`: authenticated user required.
 2. `/admin/*`: admin role required.
 3. `/auth/callback` and `/auth/local/login`: public routes with strict auth validation.
 4. Cross-user access to `/requests/:id` returns denied/not-found behavior by policy.
 
-## 10. UX Contract for Key Failures
+## 11. UX Contract for Key Failures
 1. Auth callback failure: show retry login action and short diagnostic code.
 2. Duplicate request conflict: show existing request link instead of generic error.
 3. Provisioning failure: show last error timestamp and admin remediation path.
