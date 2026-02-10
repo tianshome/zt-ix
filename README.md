@@ -25,7 +25,7 @@ uv sync --dev
 docker compose up -d postgres redis
 ```
 
-PostgreSQL is exposed on host port `5433` to avoid conflicts with existing services on `5432`.
+PostgreSQL is exposed on host port `5433` to avoid conflicts with existing/production services on `5432`.
 
 ### Start the API
 ```bash
