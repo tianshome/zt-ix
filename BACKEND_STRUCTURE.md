@@ -302,7 +302,7 @@ All API responses are JSON.
 7. Controller lifecycle credential rotation events must be auditable and avoid plaintext secret logging.
 8. Backup artifacts for controller lifecycle workflows must be access-restricted and validated before use.
 
-## 9. Required Environment Variables (Current + Planned)
+## 9. Required Environment Variables
 Current implementation:
 1. `APP_SECRET_KEY`
 2. `DATABASE_URL`
@@ -314,22 +314,22 @@ Current implementation:
 8. `ZT_PROVIDER` (`central|self_hosted_controller`)
 9. `ZT_CENTRAL_API_TOKEN` (required when `ZT_PROVIDER=central`)
 10. `ZT_CONTROLLER_BASE_URL` (required when `ZT_PROVIDER=self_hosted_controller`)
-11. `ZT_CONTROLLER_AUTH_TOKEN` (required when `ZT_PROVIDER=self_hosted_controller`)
-12. `ROUTE_SERVER_HOSTS` (comma-separated SSH targets, empty disables route-server fanout)
-13. `ROUTE_SERVER_SSH_USER`
-14. `ROUTE_SERVER_SSH_PORT`
-15. `ROUTE_SERVER_SSH_PRIVATE_KEY_PATH`
-16. `ROUTE_SERVER_SSH_CONNECT_TIMEOUT_SECONDS`
-17. `ROUTE_SERVER_SSH_STRICT_HOST_KEY`
-18. `ROUTE_SERVER_SSH_KNOWN_HOSTS_FILE`
-19. `ROUTE_SERVER_REMOTE_CONFIG_DIR`
-20. `ROUTE_SERVER_LOCAL_ASN`
-
-Planned for Sub-phase 5D lifecycle ownership:
-21. `ZT_CONTROLLER_REQUIRED_NETWORK_IDS` (comma-separated required network IDs for readiness/reconciliation)
-22. `ZT_CONTROLLER_READINESS_STRICT` (`true|false`; strict fail-closed in release profiles)
-23. `ZT_CONTROLLER_BACKUP_DIR` (backup artifact destination path)
-24. `ZT_CONTROLLER_BACKUP_RETENTION_COUNT` (retention policy count for lifecycle backups)
+11. `ZT_CONTROLLER_AUTH_TOKEN` (required when token-file source is unset)
+12. `ZT_CONTROLLER_AUTH_TOKEN_FILE` (optional runtime secret source for controller token)
+13. `ZT_CONTROLLER_REQUIRED_NETWORK_IDS` (comma-separated required network IDs for readiness/reconciliation)
+14. `ZT_CONTROLLER_READINESS_STRICT` (`true|false`; startup fail-closed toggle)
+15. `ZT_CONTROLLER_BACKUP_DIR` (backup artifact destination path)
+16. `ZT_CONTROLLER_BACKUP_RETENTION_COUNT` (retention policy count for lifecycle backups)
+17. `ZT_CONTROLLER_STATE_DIR` (controller state source/restore path for backup workflows)
+18. `ROUTE_SERVER_HOSTS` (comma-separated SSH targets, empty disables route-server fanout)
+19. `ROUTE_SERVER_SSH_USER`
+20. `ROUTE_SERVER_SSH_PORT`
+21. `ROUTE_SERVER_SSH_PRIVATE_KEY_PATH`
+22. `ROUTE_SERVER_SSH_CONNECT_TIMEOUT_SECONDS`
+23. `ROUTE_SERVER_SSH_STRICT_HOST_KEY`
+24. `ROUTE_SERVER_SSH_KNOWN_HOSTS_FILE`
+25. `ROUTE_SERVER_REMOTE_CONFIG_DIR`
+26. `ROUTE_SERVER_LOCAL_ASN`
 
 ## 10. Edge Cases
 1. Callback replay with used `state`: reject and audit.

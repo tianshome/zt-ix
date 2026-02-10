@@ -1026,3 +1026,81 @@ Next
 
 Known bugs / regressions
 1. None identified for this documentation-only update.
+
+---
+
+Update: 2026-02-10 (Phase 8 self-hosted controller lifecycle ownership implemented)
+
+Completed
+1. Implemented Phase 8 Step 8.1 readiness gate with auditable outcomes:
+   - Added `app/provisioning/controller_lifecycle.py` with `/status` + `/controller` probes, deterministic lifecycle error codes/remediation metadata, and audit event emission.
+   - Added startup preflight in `app/main.py` for `ZT_PROVIDER=self_hosted_controller`.
+   - Added worker preflight gate in `app/provisioning/service.py` before provider authorization.
+2. Implemented Phase 8 Step 8.2 required-network reconciliation:
+   - Added reconciliation for `ZT_CONTROLLER_REQUIRED_NETWORK_IDS` with validate/create behavior and fail-closed preflight semantics.
+3. Implemented Phase 8 Step 8.3 token lifecycle controls:
+   - Added runtime token-file support (`ZT_CONTROLLER_AUTH_TOKEN_FILE`) via new helper `app/provisioning/controller_auth.py`.
+   - Updated provider factory to resolve controller token from env or runtime secret file.
+   - Added auditable token reload operation with immediate preflight validation.
+4. Implemented Phase 8 Step 8.4 backup/restore workflows and validation drill:
+   - Added controller state backup with retention policy enforcement.
+   - Added restore workflow and restore-validation drill requiring readiness + reconciliation success.
+5. Implemented Phase 8 Step 8.5 automated lifecycle coverage:
+   - Added `tests/controller_lifecycle/` suite for readiness gate, network reconciliation, token reload, backup retention, restore validation, and startup gate strict/non-strict behavior.
+   - Added provisioning lifecycle gate regression test in `tests/provisioning/test_service.py`.
+6. Added lifecycle operations CLI:
+   - `app/cli/controller_lifecycle.py` commands: `preflight`, `reload-token`, `backup`, `restore`, `restore-validate`.
+7. Updated docs and plan state:
+   - `.env.example`, `README.md`, `BACKEND_STRUCTURE.md`, and `IMPLEMENTATION_PLAN.md` updated for lifecycle env/config/verification.
+
+Verification
+1. `uv run pytest tests/controller_lifecycle -q` passed.
+2. `uv run pytest tests/provisioning -q -k lifecycle` passed.
+3. `uv run pytest tests/provisioning -q` passed.
+4. `uv run ruff check .` passed.
+5. `uv run mypy .` passed.
+6. `uv run pytest -q` passed.
+7. Manual compose sanity checks passed:
+   - `POSTGRES_HOST_PORT=55433 docker compose up -d postgres redis zerotier-controller`
+   - `POSTGRES_HOST_PORT=55433 docker compose ps postgres redis zerotier-controller`
+   - `DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55433/zt_ix uv run alembic upgrade head`
+   - `... uv run python -m app.cli.controller_lifecycle preflight` (with controller token sourced from `authtoken.secret`) returned `controller lifecycle preflight succeeded`.
+
+In progress
+1. No active implementation tasks in Phase 8 scope.
+
+Next
+1. Execute remaining Phase 8 manual drills not covered in this environment:
+   - forced readiness/auth failure gate behavior
+   - backup -> restore drill on real controller state path.
+2. Continue Phase 9 frontend hardening (`IMPLEMENTATION_PLAN.md` Step 9.1 to 9.4).
+3. Keep Phase 11.5 and 11.6 release-stage self-hosted-only and DR drill sign-off as release blockers.
+
+Known bugs / regressions
+1. No functional regressions observed in automated test suite.
+
+Notes
+1. Startup lifecycle preflight uses FastAPI lifespan handlers (not deprecated `on_event` startup hooks).
+
+---
+
+Update: 2026-02-10 (Phase 8 follow-up: lifespan startup hook)
+
+Completed
+1. Replaced deprecated FastAPI `@app.on_event("startup")` lifecycle preflight hook with lifespan handler in `app/main.py`.
+2. Preserved strict/non-strict startup gating behavior and existing lifecycle audit/preflight semantics.
+
+Verification
+1. `uv run ruff check .` passed.
+2. `uv run mypy .` passed.
+3. `uv run pytest tests/controller_lifecycle/test_startup.py -q` passed.
+4. `uv run pytest -q` passed.
+
+In progress
+1. No active implementation tasks.
+
+Next
+1. Continue with remaining open phases (Phase 9 UI hardening; Phase 11 release/DR drills).
+
+Known bugs / regressions
+1. None identified in this follow-up.

@@ -99,11 +99,17 @@ def test_process_join_request_provisioning_resolves_provider_from_settings(
         request_id: uuid.UUID,
         provider: DummyProvider,
         route_server_sync_service: object,
+        controller_lifecycle_manager: object | None,
     ) -> None:
         captured["request_id"] = request_id
         captured["provider_name"] = provider.provider_name
         captured["db_session_type"] = type(db_session).__name__
         captured["route_server_sync_service_type"] = type(route_server_sync_service).__name__
+        captured["controller_lifecycle_manager_type"] = (
+            type(controller_lifecycle_manager).__name__
+            if controller_lifecycle_manager is not None
+            else None
+        )
 
     monkeypatch.setattr(
         service,
@@ -118,6 +124,7 @@ def test_process_join_request_provisioning_resolves_provider_from_settings(
     assert captured["provider_name"] == "dummy"
     assert captured["db_session_type"] == "object"
     assert captured["route_server_sync_service_type"] == "RouteServerSyncService"
+    assert captured["controller_lifecycle_manager_type"] == "SelfHostedControllerLifecycleManager"
 
 
 def _settings(**overrides: Any) -> AppSettings:

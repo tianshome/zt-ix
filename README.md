@@ -62,6 +62,22 @@ docker compose exec -T zerotier-controller sh -lc \
 curl -fsS -H "X-ZT1-Auth: ${TOKEN}" http://127.0.0.1:9993/status'
 ```
 
+### Phase 8 lifecycle operations CLI
+Use these commands for controller lifecycle ownership workflows (readiness gate, token reload, backup/restore drill):
+
+```bash
+uv run python -m app.cli.controller_lifecycle preflight
+uv run python -m app.cli.controller_lifecycle reload-token --token-file /var/lib/zerotier-one/authtoken.secret
+uv run python -m app.cli.controller_lifecycle backup
+uv run python -m app.cli.controller_lifecycle restore-validate --backup-path /var/backups/zt-ix-controller/<backup-dir>
+```
+
+Operational notes:
+- `preflight` runs readiness probes and required-network reconciliation.
+- `reload-token` re-reads token material, then re-runs lifecycle preflight.
+- `backup` stores `controller.d`, `identity.public`, `identity.secret`, and `authtoken.secret` under `ZT_CONTROLLER_BACKUP_DIR` with retention enforced by `ZT_CONTROLLER_BACKUP_RETENTION_COUNT`.
+- `restore-validate` restores backup artifacts into `ZT_CONTROLLER_STATE_DIR` and requires readiness + reconciliation to pass before success.
+
 ### Start the API
 ```bash
 uv run uvicorn app.main:app --reload

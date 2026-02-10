@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 1.5
+Version: 1.6
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -9,7 +9,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - `[ ]` open and not yet implemented.
 - `[ ]` + `Blocked by` + `Reason` marks an explicitly blocked gap that must be revisited when the dependency is complete.
 
-## 0.1 Current Status Snapshot (through Phase 7 + planning update for Phase 8)
+## 0.1 Current Status Snapshot (through Phase 8 implementation)
 - [x] Phase 1 bootstrap is complete.
 - [x] Phase 2 data/migration foundation is complete.
 - [x] Phase 3 auth integration (Auth Option A + Auth Option B) is complete for automated coverage.
@@ -24,9 +24,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
   - Blocked by: Phase 9 Step 9.1 to Step 9.4.
   - Reason: current accepted scope uses JSON responses; frontend component/styling integration is deferred by plan.
 - [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
-- [ ] Self-hosted controller lifecycle ownership.
-  - Blocked by: Phase 8 implementation.
-  - Reason: readiness gate, network reconciliation, token lifecycle, and backup/restore flows are not implemented yet (Step 8.0 runtime bootstrap is complete).
+- [x] Self-hosted controller lifecycle ownership is implemented for planned scope (Phase 8 Step 8.1 to Step 8.5).
 
 ## 1. Planning Assumptions and Open Questions
 - [x] Assumption: manual admin approval is the default decision control.
@@ -260,46 +258,38 @@ Steps:
     - expose controller API on `127.0.0.1:9993/tcp` and controller transport on `9993/udp` while running alongside `postgres` and `redis`,
     - provide controller `local.conf` with `settings.allowManagementFrom` configured for host-originated management probes in compose topology,
     - document bootstrap sequence to run all dependency containers together and source `ZT_CONTROLLER_AUTH_TOKEN` from controller secret material (`/var/lib/zerotier-one/authtoken.secret`) or managed runtime secret.
-- [ ] Step 8.1: Implement controller runtime bootstrap and readiness gate.
+- [x] Step 8.1: Implement controller runtime bootstrap and readiness gate.
   - Minimum behaviors:
     - verify controller service reachability and auth before provisioning (`/status`, `/controller` probes),
     - fail closed in worker provisioning flow when lifecycle prerequisites are unmet,
     - emit auditable readiness outcomes with deterministic remediation metadata.
-- [ ] Step 8.2: Implement managed network bootstrap and reconciliation for owned controller mode.
+- [x] Step 8.2: Implement managed network bootstrap and reconciliation for owned controller mode.
   - Minimum behaviors:
     - reconcile required network IDs from `ZT_CONTROLLER_REQUIRED_NETWORK_IDS`,
     - validate/create required controller networks before provisioning begins,
     - fail closed when reconciliation cannot converge.
-  - Blocked by: Step 8.1.
-  - Reason: network reconciliation requires authenticated lifecycle client/readiness gate behavior.
-- [ ] Step 8.3: Implement controller auth token lifecycle controls.
+- [x] Step 8.3: Implement controller auth token lifecycle controls.
   - Minimum behaviors:
     - support controlled token reload from runtime secret source,
     - re-run readiness gate immediately after token reload,
     - keep provisioning blocked on token/auth validation failure and emit lifecycle audit events.
-  - Blocked by: Step 8.1.
-  - Reason: token lifecycle operations depend on established readiness gate behavior.
-- [ ] Step 8.4: Implement controller state backup/restore workflows and verification drill.
+- [x] Step 8.4: Implement controller state backup/restore workflows and verification drill.
   - Minimum behaviors:
     - backup controller state artifacts (`controller.d` plus controller identity files) to `ZT_CONTROLLER_BACKUP_DIR`,
     - enforce retention policy from `ZT_CONTROLLER_BACKUP_RETENTION_COUNT`,
     - define restore validation drill that must pass readiness + network reconciliation before provisioning resumes.
-  - Blocked by: Step 8.1.
-  - Reason: backup/restore acceptance criteria depend on readiness and reconciliation outcomes.
-- [ ] Step 8.5: Add lifecycle-focused automated tests and manual drill checklist.
+- [x] Step 8.5: Add lifecycle-focused automated tests and manual drill checklist.
   - Minimum coverage:
     - readiness success/failure gating behavior,
     - required-network reconciliation convergence/failure behavior,
     - token reload success/failure behavior,
     - backup retention and restore validation gating behavior.
-  - Blocked by: Step 8.1 to Step 8.4.
-  - Reason: lifecycle test targets do not exist until implementation of readiness/reconciliation/token/backup workflows is complete.
 
 Exit criteria:
 - [x] `zerotier/zerotier:1.14.2` controller runs on `9993` (TCP API + UDP transport) in the same compose stack as `postgres` and `redis`.
-- [ ] Startup and worker provisioning paths fail closed when self-hosted lifecycle readiness is unhealthy.
-- [ ] Required controller networks reconcile before member authorization attempts run.
-- [ ] Token reload control and backup/restore validation drill are auditable and test-backed.
+- [x] Startup and worker provisioning paths fail closed when self-hosted lifecycle readiness is unhealthy.
+- [x] Required controller networks reconcile before member authorization attempts run.
+- [x] Token reload control and backup/restore validation drill are auditable and test-backed.
 - [ ] Release profile behavior is validated without `ZT_CENTRAL_API_TOKEN` dependency.
   - Blocked by: Phase 11 Step 11.5.
   - Reason: release-gate validation is executed in staging during phase 11.
@@ -311,12 +301,9 @@ Verification:
 - [x] `POSTGRES_HOST_PORT=55433 docker compose exec -T zerotier-controller sh -lc 'TOKEN="$(cat /var/lib/zerotier-one/authtoken.secret)"; curl -fsS -H "X-ZT1-Auth: ${TOKEN}" http://127.0.0.1:9993/status'`
 - [x] `curl -fsS -H "X-ZT1-Auth: ${ZT_CONTROLLER_AUTH_TOKEN}" http://127.0.0.1:9993/controller`
 - [x] `curl -fsS -H "X-ZT1-Auth: ${ZT_CONTROLLER_AUTH_TOKEN}" http://127.0.0.1:9993/controller/network`
-- [ ] `pytest tests/controller_lifecycle -q`
-  - Blocked by: Step 8.1 to Step 8.5.
-  - Reason: lifecycle test suite does not exist yet.
-- [ ] `pytest tests/provisioning -q -k lifecycle`
-  - Blocked by: Step 8.1 to Step 8.5.
-  - Reason: provisioning lifecycle-gate tests do not exist yet.
+- [x] `DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55433/zt_ix ZT_PROVIDER=self_hosted_controller ... uv run python -m app.cli.controller_lifecycle preflight`
+- [x] `pytest tests/controller_lifecycle -q`
+- [x] `pytest tests/provisioning -q -k lifecycle`
 - [ ] Manual checks:
   - controller container starts healthy with `postgres` and `redis` in the same compose run
   - readiness gate blocks provisioning while controller auth/probes fail

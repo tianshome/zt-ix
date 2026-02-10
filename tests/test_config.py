@@ -51,6 +51,12 @@ def test_from_env_reads_provisioning_provider_settings(monkeypatch: pytest.Monke
     monkeypatch.setenv("ZT_CENTRAL_API_TOKEN", "central-secret")
     monkeypatch.setenv("ZT_CONTROLLER_BASE_URL", "http://controller.example:9993/controller")
     monkeypatch.setenv("ZT_CONTROLLER_AUTH_TOKEN", "controller-secret")
+    monkeypatch.setenv("ZT_CONTROLLER_AUTH_TOKEN_FILE", "/run/secrets/zt_controller_token")
+    monkeypatch.setenv("ZT_CONTROLLER_REQUIRED_NETWORK_IDS", "abcdef0123456789,0123456789abcdef")
+    monkeypatch.setenv("ZT_CONTROLLER_READINESS_STRICT", "true")
+    monkeypatch.setenv("ZT_CONTROLLER_BACKUP_DIR", "/var/backups/zt-ix-controller")
+    monkeypatch.setenv("ZT_CONTROLLER_BACKUP_RETENTION_COUNT", "21")
+    monkeypatch.setenv("ZT_CONTROLLER_STATE_DIR", "/var/lib/zerotier-one")
 
     settings = AppSettings.from_env()
 
@@ -60,3 +66,12 @@ def test_from_env_reads_provisioning_provider_settings(monkeypatch: pytest.Monke
     assert settings.zt_central_api_token == "central-secret"
     assert settings.zt_controller_base_url == "http://controller.example:9993/controller"
     assert settings.zt_controller_auth_token == "controller-secret"
+    assert settings.zt_controller_auth_token_file == "/run/secrets/zt_controller_token"
+    assert settings.zt_controller_required_network_ids == (
+        "abcdef0123456789",
+        "0123456789abcdef",
+    )
+    assert settings.zt_controller_readiness_strict is True
+    assert settings.zt_controller_backup_dir == "/var/backups/zt-ix-controller"
+    assert settings.zt_controller_backup_retention_count == 21
+    assert settings.zt_controller_state_dir == "/var/lib/zerotier-one"

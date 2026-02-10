@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.config import AppSettings
+from app.provisioning.controller_auth import resolve_controller_auth_token
 from app.provisioning.providers.base import ProvisioningProvider
 from app.provisioning.providers.central import ZeroTierCentralProvider
 from app.provisioning.providers.self_hosted_controller import (
@@ -22,11 +23,7 @@ def create_provisioning_provider(settings: AppSettings) -> ProvisioningProvider:
         return ZeroTierCentralProvider(base_url=base_url, api_token=token)
 
     if provider_mode == "self_hosted_controller":
-        token = settings.zt_controller_auth_token.strip()
-        if not token:
-            raise ValueError(
-                "ZT_CONTROLLER_AUTH_TOKEN is required when ZT_PROVIDER=self_hosted_controller"
-            )
+        token = resolve_controller_auth_token(settings)
         base_url = settings.zt_controller_base_url.strip()
         if not base_url:
             raise ValueError(
@@ -38,4 +35,3 @@ def create_provisioning_provider(settings: AppSettings) -> ProvisioningProvider:
         "ZT_PROVIDER must be either 'central' or 'self_hosted_controller' "
         f"(received {settings.zt_provider!r})"
     )
-

@@ -36,6 +36,12 @@ class AppSettings:
     zt_central_api_token: str = ""
     zt_controller_base_url: str = "http://127.0.0.1:9993/controller"
     zt_controller_auth_token: str = ""
+    zt_controller_auth_token_file: str = ""
+    zt_controller_required_network_ids: tuple[str, ...] = ()
+    zt_controller_readiness_strict: bool = True
+    zt_controller_backup_dir: str = "/var/backups/zt-ix-controller"
+    zt_controller_backup_retention_count: int = 14
+    zt_controller_state_dir: str = "/var/lib/zerotier-one"
     route_server_hosts: tuple[str, ...] = ()
     route_server_ssh_user: str = "root"
     route_server_ssh_port: int = 22
@@ -58,6 +64,7 @@ class AppSettings:
         scopes_raw = os.getenv("PEERINGDB_SCOPES", "openid profile email networks")
         scopes = _normalize_peeringdb_scopes(scopes_raw)
         route_server_hosts = _parse_csv_list(os.getenv("ROUTE_SERVER_HOSTS", ""))
+        required_network_ids = _parse_csv_list(os.getenv("ZT_CONTROLLER_REQUIRED_NETWORK_IDS", ""))
 
         return cls(
             app_env=app_env,
@@ -104,6 +111,23 @@ class AppSettings:
                 "http://127.0.0.1:9993/controller",
             ),
             zt_controller_auth_token=os.getenv("ZT_CONTROLLER_AUTH_TOKEN", ""),
+            zt_controller_auth_token_file=os.getenv("ZT_CONTROLLER_AUTH_TOKEN_FILE", "").strip(),
+            zt_controller_required_network_ids=required_network_ids,
+            zt_controller_readiness_strict=_env_bool("ZT_CONTROLLER_READINESS_STRICT", True),
+            zt_controller_backup_dir=os.getenv(
+                "ZT_CONTROLLER_BACKUP_DIR",
+                "/var/backups/zt-ix-controller",
+            ).strip()
+            or "/var/backups/zt-ix-controller",
+            zt_controller_backup_retention_count=max(
+                1,
+                _env_int("ZT_CONTROLLER_BACKUP_RETENTION_COUNT", 14),
+            ),
+            zt_controller_state_dir=os.getenv(
+                "ZT_CONTROLLER_STATE_DIR",
+                "/var/lib/zerotier-one",
+            ).strip()
+            or "/var/lib/zerotier-one",
             route_server_hosts=route_server_hosts,
             route_server_ssh_user=os.getenv("ROUTE_SERVER_SSH_USER", "root").strip(),
             route_server_ssh_port=max(1, _env_int("ROUTE_SERVER_SSH_PORT", 22)),

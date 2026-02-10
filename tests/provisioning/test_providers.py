@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -55,6 +56,20 @@ def test_factory_requires_provider_credentials() -> None:
 
     with pytest.raises(ValueError, match="ZT_CONTROLLER_AUTH_TOKEN"):
         create_provisioning_provider(controller_settings)
+
+
+def test_factory_reads_self_hosted_token_from_file(tmp_path: Path) -> None:
+    token_file = tmp_path / "controller_token.secret"
+    token_file.write_text("token-from-file\n", encoding="utf-8")
+    settings = _settings(
+        zt_provider="self_hosted_controller",
+        zt_controller_auth_token="",
+        zt_controller_auth_token_file=str(token_file),
+    )
+
+    provider = create_provisioning_provider(settings)
+
+    assert isinstance(provider, ZeroTierSelfHostedControllerProvider)
 
 
 @pytest.mark.parametrize(

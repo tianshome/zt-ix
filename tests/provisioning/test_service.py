@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from typing import cast
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.enums import RequestStatus
 from app.db.models import AppUser, AuditEvent, JoinRequest, ZtMembership, ZtNetwork
+from app.provisioning.controller_lifecycle import (
+    ControllerLifecycleGateError,
+    SelfHostedControllerLifecycleManager,
+)
 from app.provisioning.providers.base import ProviderAuthError, ProvisionResult
 from app.provisioning.route_servers import (
     RouteServerHostFailure,
@@ -318,6 +324,53 @@ def test_provider_auth_failure_sets_failed_status_and_retry_count(db_session: Se
     assert refreshed.retry_count == 1
     assert refreshed.last_error is not None
     assert refreshed.last_error.startswith("provider_auth_error")
+
+
+def test_lifecycle_gate_failure_sets_request_failed_without_provider_calls(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_row = _seed_join_request(
+        db_session,
+        status=RequestStatus.APPROVED,
+        node_id="abcde12345",
+    )
+    provider = StubProvider()
+
+    def fake_preflight(**_: object) -> None:
+        raise ControllerLifecycleGateError(
+            "controller preflight failed: auth rejected",
+            remediation="reload token",
+        )
+
+    monkeypatch.setattr(
+        "app.provisioning.service.run_controller_lifecycle_preflight",
+        fake_preflight,
+    )
+
+    process_join_request_provisioning_with_provider(
+        db_session=db_session,
+        request_id=request_row.id,
+        provider=provider,
+        controller_lifecycle_manager=cast(SelfHostedControllerLifecycleManager, object()),
+    )
+
+    refreshed = db_session.get(JoinRequest, request_row.id)
+    assert refreshed is not None
+    assert refreshed.status is RequestStatus.FAILED
+    assert refreshed.retry_count == 1
+    assert refreshed.last_error is not None
+    assert refreshed.last_error.startswith("controller_lifecycle_gate_error")
+    assert provider.validate_calls == []
+    assert provider.authorize_calls == []
+
+    failed_event = db_session.execute(
+        select(AuditEvent).where(
+            AuditEvent.action == "provisioning.failed",
+            AuditEvent.target_id == str(request_row.id),
+        )
+    ).scalar_one()
+    assert failed_event.event_metadata["error_code"] == "controller_lifecycle_gate_error"
 
 
 def test_existing_membership_row_is_upserted_without_duplication(db_session: Session) -> None:

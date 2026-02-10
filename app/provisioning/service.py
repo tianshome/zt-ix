@@ -12,6 +12,12 @@ from sqlalchemy.orm import Session
 from app.config import AppSettings
 from app.db.enums import RequestStatus
 from app.db.session import SessionLocal
+from app.provisioning.controller_lifecycle import (
+    ControllerLifecycleError,
+    SelfHostedControllerLifecycleManager,
+    create_controller_lifecycle_manager,
+    run_controller_lifecycle_preflight,
+)
 from app.provisioning.providers import (
     ProviderNetworkNotFoundError,
     ProvisioningProvider,
@@ -41,12 +47,16 @@ class ProvisioningInputError(Exception):
 def process_join_request_provisioning(*, request_id: uuid.UUID, settings: AppSettings) -> None:
     provider = create_provisioning_provider(settings)
     route_server_sync_service = create_route_server_sync_service(settings)
+    lifecycle_manager: SelfHostedControllerLifecycleManager | None = None
+    if settings.zt_provider.strip().lower() == "self_hosted_controller":
+        lifecycle_manager = create_controller_lifecycle_manager(settings)
     with SessionLocal() as db_session:
         process_join_request_provisioning_with_provider(
             db_session=db_session,
             request_id=request_id,
             provider=provider,
             route_server_sync_service=route_server_sync_service,
+            controller_lifecycle_manager=lifecycle_manager,
         )
 
 
@@ -56,6 +66,7 @@ def process_join_request_provisioning_with_provider(
     request_id: uuid.UUID,
     provider: ProvisioningProvider,
     route_server_sync_service: RouteServerSyncer | None = None,
+    controller_lifecycle_manager: SelfHostedControllerLifecycleManager | None = None,
 ) -> None:
     request_repo = JoinRequestRepository(db_session)
     audit_repo = AuditEventRepository(db_session)
@@ -126,6 +137,15 @@ def process_join_request_provisioning_with_provider(
         return
 
     try:
+        if controller_lifecycle_manager is not None:
+            run_controller_lifecycle_preflight(
+                manager=controller_lifecycle_manager,
+                db_session=db_session,
+                strict_fail_closed=True,
+                trigger="worker_provisioning",
+                actor_user_id=request_row.user_id,
+                request_id=request_row.id,
+            )
         provision_result = _authorize_membership(
             provider=provider,
             request_id=request_row.id,
@@ -201,6 +221,7 @@ def process_join_request_provisioning_with_provider(
         )
         db_session.commit()
     except (
+        ControllerLifecycleError,
         ProvisioningProviderError,
         ProvisioningInputError,
         RouteServerSyncError,
@@ -349,6 +370,8 @@ def _write_status_audit_event(
 
 
 def _exception_error_code(exc: Exception) -> str:
+    if isinstance(exc, ControllerLifecycleError):
+        return exc.error_code
     if isinstance(exc, ProvisioningProviderError):
         return exc.error_code
     if isinstance(exc, ProvisioningInputError):
