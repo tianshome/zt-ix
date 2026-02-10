@@ -29,7 +29,7 @@ def test_auth_login_persists_state_and_redirects(client: TestClient, db_session:
 
     assert location.startswith("https://auth.peeringdb.com/oauth2/authorize/?")
     assert params["response_type"] == ["code"]
-    assert params["scope"] == ["profile email networks"]
+    assert params["scope"] == ["openid profile email networks"]
     assert params["code_challenge_method"] == ["S256"]
 
     state = params["state"][0]
@@ -158,6 +158,36 @@ def test_auth_callback_rejects_invalid_nonce(
 
     assert response.status_code == 302
     assert _error_code_from_location(response.headers["location"]) == "invalid_nonce"
+    assert _error_detail_from_location(response.headers["location"]) == "nonce_mismatch"
+
+
+def test_auth_callback_missing_id_token_returns_nonce_detail(
+    client: TestClient,
+    stub_peeringdb_client: StubPeeringDBClient,
+) -> None:
+    login_response = client.get("/auth/login", follow_redirects=False)
+    state = parse_qs(urlparse(login_response.headers["location"]).query)["state"][0]
+
+    stub_peeringdb_client.token_result = PeeringDBTokenResponse(
+        access_token="token-success",
+        id_token=None,
+    )
+
+    callback_response = client.get(
+        f"/auth/callback?code=abc123&state={state}",
+        follow_redirects=False,
+    )
+    error_location = callback_response.headers["location"]
+
+    assert callback_response.status_code == 302
+    assert _error_code_from_location(error_location) == "invalid_nonce"
+    assert _error_detail_from_location(error_location) == "missing_id_token"
+
+    error_response = client.get(error_location)
+    body = error_response.json()
+    assert body["code"] == "invalid_nonce"
+    assert body["detail"] == "missing_id_token"
+    assert body["message"] == "OIDC nonce validation failed for the returned identity token."
 
 
 def test_auth_callback_replay_state_is_rejected(
@@ -194,6 +224,14 @@ def test_auth_callback_replay_state_is_rejected(
 def _error_code_from_location(location: str) -> str | None:
     params = parse_qs(urlparse(location).query)
     values = params.get("code")
+    if not values:
+        return None
+    return values[0]
+
+
+def _error_detail_from_location(location: str) -> str | None:
+    params = parse_qs(urlparse(location).query)
+    values = params.get("detail")
     if not values:
         return None
     return values[0]

@@ -8,6 +8,16 @@ from app.db.session import SessionLocal
 from app.integrations.peeringdb import PeeringDBClient
 from app.routes.auth import router as auth_router
 
+ERROR_MESSAGES: dict[str, str] = {
+    "oauth_error": "Login was canceled or rejected by PeeringDB.",
+    "missing_code_or_state": "Callback is missing required OAuth parameters.",
+    "invalid_state": "Login session is invalid or has already been used.",
+    "expired_state": "Login session expired before callback completed.",
+    "invalid_nonce": "OIDC nonce validation failed for the returned identity token.",
+    "upstream_auth_failure": "PeeringDB token or profile request failed.",
+    "no_eligible_asn": "No eligible ASN was found for this account.",
+}
+
 
 def create_app(settings: AppSettings | None = None) -> FastAPI:
     app_settings = settings or get_settings()
@@ -43,8 +53,13 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         return {"status": "ready", "user_id": user_id}
 
     @app.get("/error", tags=["system"], name="error_page")
-    async def error_page(code: str = "unknown") -> dict[str, str]:
-        return {"status": "error", "code": code}
+    async def error_page(code: str = "unknown", detail: str | None = None) -> dict[str, str | None]:
+        return {
+            "status": "error",
+            "code": code,
+            "message": ERROR_MESSAGES.get(code, "Unknown error"),
+            "detail": detail,
+        }
 
     return app
 

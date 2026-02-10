@@ -37,8 +37,8 @@ class AppSettings:
         app_env = os.getenv("APP_ENV", "development").strip().lower()
         secure_default = app_env == "production"
 
-        scopes_raw = os.getenv("PEERINGDB_SCOPES", "profile email networks")
-        scopes = tuple(scope for scope in scopes_raw.split() if scope)
+        scopes_raw = os.getenv("PEERINGDB_SCOPES", "openid profile email networks")
+        scopes = _normalize_peeringdb_scopes(scopes_raw)
 
         return cls(
             app_env=app_env,
@@ -103,6 +103,21 @@ def _env_float(name: str, default: float) -> float:
         return float(raw)
     except ValueError:
         return default
+
+
+def _normalize_peeringdb_scopes(scopes_raw: str) -> tuple[str, ...]:
+    parsed = [scope.strip() for scope in scopes_raw.split() if scope.strip()]
+    if "openid" not in parsed:
+        parsed.insert(0, "openid")
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for scope in parsed:
+        if scope in seen:
+            continue
+        seen.add(scope)
+        normalized.append(scope)
+    return tuple(normalized)
 
 
 @lru_cache(maxsize=1)

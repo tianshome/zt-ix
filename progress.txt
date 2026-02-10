@@ -313,3 +313,45 @@ Known bugs / regressions
 
 Notes
 1. Added test package `__init__.py` files to keep strict `mypy` module resolution stable with multiple `conftest.py` modules.
+
+---
+
+Update: 2026-02-10 (Phase 3 auth nonce fix + detailed callback error surface)
+
+Decision
+1. Enforced OIDC scope requirement by always including `openid` in configured PeeringDB scopes to ensure `id_token` nonce validation can succeed.
+2. Expanded callback error redirect contract to include user-visible `detail` codes/messages for faster diagnosis without reading server logs.
+
+Completed
+1. Fixed likely `invalid_nonce` root cause path:
+   - Updated scope normalization in `app/config.py` to inject `openid` when missing and deduplicate configured scopes.
+   - Updated `.env.example` default `PEERINGDB_SCOPES` to `openid profile email networks`.
+   - Updated `TECH_STACK.md` documented scope list to include `openid`.
+2. Added richer callback error details:
+   - Extended `/auth/callback` redirect helper to include `detail` query parameter.
+   - Added nonce error detail-code mapping (for example `missing_id_token`, `missing_nonce_claim`, `nonce_mismatch`).
+   - Added structured detail propagation for `oauth_error`, state errors, and upstream auth failures.
+3. Expanded `/error` response payload:
+   - Added user-facing `message` per error code.
+   - Added passthrough `detail` field for callback diagnostics.
+4. Updated tests:
+   - Scope assertion now expects `openid profile email networks`.
+   - Added coverage for nonce mismatch detail code.
+   - Added coverage for missing `id_token` returning `invalid_nonce` with `missing_id_token` detail and message payload.
+   - Added config tests for environment-scope normalization (`openid` injection and deduplication).
+5. Updated README Phase 3 instructions to explicitly require `PEERINGDB_SCOPES` including `openid`.
+
+Verification
+1. `uv run ruff check .` passed.
+2. `uv run mypy .` passed.
+3. `uv run pytest -q` passed.
+
+In progress
+1. No active implementation tasks in this update.
+
+Next
+1. Re-run browser integration login against live PeeringDB with updated `PEERINGDB_SCOPES` and verify callback reaches `/onboarding`.
+2. Capture any remaining live-provider callback detail codes from `/error` for follow-up hardening if needed.
+
+Known bugs / regressions
+1. No regressions detected in local automated checks for this scope.

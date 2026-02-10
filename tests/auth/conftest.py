@@ -81,7 +81,7 @@ def auth_settings() -> AppSettings:
         peeringdb_authorization_url="https://auth.peeringdb.com/oauth2/authorize/",
         peeringdb_token_url="https://auth.peeringdb.com/oauth2/token/",
         peeringdb_profile_url="https://auth.peeringdb.com/profile/v1",
-        peeringdb_scopes=("profile", "email", "networks"),
+        peeringdb_scopes=("openid", "profile", "email", "networks"),
         peeringdb_http_timeout_seconds=2.0,
     )
 

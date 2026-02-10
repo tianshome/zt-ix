@@ -102,12 +102,12 @@ async def auth_callback(
             metadata={"oauth_error": error},
         )
         db_session.commit()
-        return _error_redirect(request, "oauth_error")
+        return _error_redirect(request, "oauth_error", detail=error)
 
     if not code or not state:
         _audit_callback_failure(audit_repo, error_code="missing_code_or_state", target_state=state)
         db_session.commit()
-        return _error_redirect(request, "missing_code_or_state")
+        return _error_redirect(request, "missing_code_or_state", detail="missing_code_or_state")
 
     oauth_repo = OauthStateNonceRepository(db_session)
     consume_result = oauth_repo.consume_state(state=state)
@@ -115,18 +115,18 @@ async def auth_callback(
     if consume_result.status is OauthStateConsumeStatus.MISSING:
         _audit_callback_failure(audit_repo, error_code="invalid_state", target_state=state)
         db_session.commit()
-        return _error_redirect(request, "invalid_state")
+        return _error_redirect(request, "invalid_state", detail="state_missing_or_reused")
 
     if consume_result.status is OauthStateConsumeStatus.EXPIRED:
         _audit_callback_failure(audit_repo, error_code="expired_state", target_state=state)
         db_session.commit()
-        return _error_redirect(request, "expired_state")
+        return _error_redirect(request, "expired_state", detail="state_expired")
 
     state_row = consume_result.row
     if state_row is None:
         _audit_callback_failure(audit_repo, error_code="invalid_state", target_state=state)
         db_session.commit()
-        return _error_redirect(request, "invalid_state")
+        return _error_redirect(request, "invalid_state", detail="state_missing_or_reused")
 
     try:
         token_response = await peeringdb_client.exchange_code_for_tokens(
@@ -137,14 +137,15 @@ async def auth_callback(
         validate_id_token_nonce(id_token=token_response.id_token, expected_nonce=state_row.nonce)
         profile = await peeringdb_client.fetch_profile(access_token=token_response.access_token)
     except PeeringDBNonceValidationError as exc:
+        detail_code = _nonce_error_detail(exc)
         _audit_callback_failure(
             audit_repo,
             error_code="invalid_nonce",
             target_state=state,
-            metadata={"detail": str(exc)},
+            metadata={"detail": str(exc), "detail_code": detail_code},
         )
         db_session.commit()
-        return _error_redirect(request, "invalid_nonce")
+        return _error_redirect(request, "invalid_nonce", detail=detail_code)
     except PeeringDBClientError as exc:
         _audit_callback_failure(
             audit_repo,
@@ -153,7 +154,7 @@ async def auth_callback(
             metadata={"detail": str(exc)},
         )
         db_session.commit()
-        return _error_redirect(request, "upstream_auth_failure")
+        return _error_redirect(request, "upstream_auth_failure", detail=str(exc))
 
     user_repo = UserRepository(db_session)
     user_asn_repo = UserAsnRepository(db_session)
@@ -258,6 +259,21 @@ def _audit_callback_failure(
     )
 
 
-def _error_redirect(request: Request, code: str) -> RedirectResponse:
-    error_url = URL(str(request.url_for("error_page"))).include_query_params(code=code)
+def _error_redirect(request: Request, code: str, detail: str | None = None) -> RedirectResponse:
+    params: dict[str, str] = {"code": code}
+    if detail:
+        params["detail"] = detail
+
+    error_url = URL(str(request.url_for("error_page"))).include_query_params(**params)
     return RedirectResponse(str(error_url), status_code=302)
+
+
+def _nonce_error_detail(exc: PeeringDBNonceValidationError) -> str:
+    detail_map = {
+        "missing id_token for nonce validation": "missing_id_token",
+        "id_token nonce claim missing": "missing_nonce_claim",
+        "id_token nonce mismatch": "nonce_mismatch",
+        "invalid id_token format": "invalid_id_token_format",
+        "invalid id_token payload": "invalid_id_token_payload",
+    }
+    return detail_map.get(str(exc), "invalid_nonce_token")

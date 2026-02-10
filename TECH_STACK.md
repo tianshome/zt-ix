@@ -61,6 +61,7 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
    - Token endpoint: `https://auth.peeringdb.com/oauth2/token/`
    - Profile endpoint (claims + network context): `https://auth.peeringdb.com/profile/v1`
 2. PeeringDB OAuth scopes used by this app are from documented scope names:
+   - `openid`
    - `profile`
    - `email`
    - `networks`

@@ -56,6 +56,7 @@ Use these steps on a machine where a browser is available.
    - `PEERINGDB_CLIENT_ID`
    - `PEERINGDB_CLIENT_SECRET`
    - `PEERINGDB_REDIRECT_URI`
+   - `PEERINGDB_SCOPES` (must include `openid` for nonce-validated OIDC callbacks)
    - `APP_SECRET_KEY`
 3. Start local dependencies and apply schema:
    ```bash
