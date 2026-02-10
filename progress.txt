@@ -261,6 +261,33 @@ Next
 
 ---
 
+Update: 2026-02-10 (Phase 8 lifecycle ownership plan tightened to MVP scope)
+
+Decision
+1. Phase 8 now explicitly targets minimum-viable self-hosted controller lifecycle ownership, not parity with ZeroTier Central.
+2. `v0.1.0` assumes single-controller lifecycle ownership; HA topology orchestration is deferred and not a Phase 8 blocker.
+
+Completed
+1. Revised `IMPLEMENTATION_PLAN.md` Phase 8 to make implementation actionable and bounded:
+   - Added explicit scope boundaries (in-scope vs out-of-scope).
+   - Rewrote Step 8.1 to Step 8.5 with concrete readiness, network reconciliation, token reload, backup/restore, and test expectations.
+   - Tightened exit criteria and verification commands around fail-closed lifecycle gating.
+2. Cleaned plan consistency:
+   - Updated snapshot heading to include Phase 7 completion.
+   - Replaced stale open-question wording that referenced finishing phase 5 before implementation.
+
+In progress
+1. No implementation code changes; documentation refinement only.
+
+Next
+1. Align `PRD.md`, `APP_FLOW.md`, and `BACKEND_STRUCTURE.md` wording with the revised Phase 8 MVP/non-parity language where needed.
+2. Implement Phase 8 Step 8.1 readiness gate and add initial lifecycle audit events.
+
+Known bugs / regressions
+1. None identified from this documentation update.
+
+---
+
 Update: 2026-02-10 (Phase 4 request workflow complete)
 
 Completed

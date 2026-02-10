@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 1.1
+Version: 1.2
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -9,7 +9,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - `[ ]` open and not yet implemented.
 - `[ ]` + `Blocked by` + `Reason` marks an explicitly blocked gap that must be revisited when the dependency is complete.
 
-## 0.1 Current Status Snapshot (through Phase 6 + planning update for Phase 8)
+## 0.1 Current Status Snapshot (through Phase 7 + planning update for Phase 8)
 - [x] Phase 1 bootstrap is complete.
 - [x] Phase 2 data/migration foundation is complete.
 - [x] Phase 3 auth integration (Auth Option A + Auth Option B) is complete for automated coverage.
@@ -39,8 +39,8 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] Requirement: generated BIRD policy path must enable ROA/RPKI validation for route acceptance decisions.
 - [x] Requirement: policy auto-approval is a configurable option, with manual admin approval remaining the default mode.
 - [ ] Open question: exact auto-approval policy guardrails (eligibility checks, fallback behavior, and rate-limit posture) still need product/security sign-off.
-- [ ] Open question: target retry limits/backoff constants should be finalized before phase 5 implementation.
-- [ ] Open question: self-hosted controller runtime topology (single-node vs HA pair) for v0.1.0 should be finalized before Phase 8 implementation starts.
+- [ ] Open question: target retry limits/backoff constants for self-hosted lifecycle operations should be finalized before Phase 8 production rollout.
+- [x] Assumption: Phase 8 lifecycle ownership targets a single self-hosted controller for `v0.1.0`; HA pair/topology orchestration is post-`v0.1.0` hardening and not a Phase 8 blocker.
 - [x] Open question resolved: for Auth Option A, empty associated-network assignment means unrestricted access when no rows exist.
 
 ## 1.1 Option Labels (Disambiguation)
@@ -246,46 +246,52 @@ Verification:
 
 ## 10. Phase 8: Self-Hosted Controller Lifecycle Ownership
 Implements: PRD `F4`, `F6`, `F7`, `F9`.
-Goal: make the repository responsible for self-hosted controller lifecycle operations required for production ownership.
+Goal: implement minimum viable lifecycle ownership for self-hosted controller operation in release environments, without ZeroTier Central feature parity.
+
+Scope boundaries:
+- In scope: readiness/auth gating, required-network reconciliation, token reload control, backup/restore validation drill, and lifecycle audit events.
+- Out of scope: ZeroTier Central feature parity, Central org/user/team workflows, billing workflows, and custom roots/planet orchestration.
 
 Steps:
-- [ ] Step 8.1: Implement controller runtime bootstrap and readiness workflow.
+- [ ] Step 8.1: Implement controller runtime bootstrap and readiness gate.
   - Minimum behaviors:
-    - verify controller API reachability/auth at startup,
-    - verify controller identity/state prerequisites,
-    - fail closed when lifecycle prerequisites are missing.
+    - verify controller service reachability and auth before provisioning (`/status`, `/controller` probes),
+    - fail closed in worker provisioning flow when lifecycle prerequisites are unmet,
+    - emit auditable readiness outcomes with deterministic remediation metadata.
 - [ ] Step 8.2: Implement managed network bootstrap and reconciliation for owned controller mode.
   - Minimum behaviors:
-    - create/ensure required ZeroTier network(s) on owned controller,
-    - reconcile expected network metadata before provisioning starts.
+    - reconcile required network IDs from `ZT_CONTROLLER_REQUIRED_NETWORK_IDS`,
+    - validate/create required controller networks before provisioning begins,
+    - fail closed when reconciliation cannot converge.
   - Blocked by: Step 8.1.
-  - Reason: network lifecycle operations require validated controller runtime readiness.
+  - Reason: network reconciliation requires authenticated controller lifecycle client and readiness state.
 - [ ] Step 8.3: Implement controller auth token lifecycle controls.
   - Minimum behaviors:
-    - rotate/reload controller auth credentials with deterministic failure handling,
-    - emit audit events for token lifecycle actions.
+    - support controlled token reload from runtime secret source,
+    - re-run readiness gate immediately after token reload,
+    - keep provisioning blocked on token/auth validation failure and emit lifecycle audit events.
   - Blocked by: Step 8.1.
-  - Reason: token lifecycle controls depend on owned-controller bootstrap contract.
+  - Reason: token lifecycle operations depend on established readiness gate behavior.
 - [ ] Step 8.4: Implement controller state backup/restore workflows and verification drill.
   - Minimum behaviors:
-    - scheduled backup artifact generation,
-    - documented restore path,
-    - post-restore validation checks before reopening provisioning.
+    - backup controller state artifacts (`controller.d` plus controller identity files) to `ZT_CONTROLLER_BACKUP_DIR`,
+    - enforce retention policy from `ZT_CONTROLLER_BACKUP_RETENTION_COUNT`,
+    - define restore validation drill that must pass readiness + network reconciliation before provisioning resumes.
   - Blocked by: Step 8.1.
-  - Reason: backup/restore contract depends on settled controller runtime/state conventions.
-- [ ] Step 8.5: Add integration tests for owned lifecycle paths using a real self-hosted controller instance.
+  - Reason: backup/restore acceptance criteria depend on readiness and reconciliation outcomes.
+- [ ] Step 8.5: Add lifecycle-focused automated tests and manual drill checklist.
   - Minimum coverage:
-    - bootstrap success/failure,
-    - managed network reconciliation,
-    - credential rotation behavior,
-    - backup/restore validation path.
+    - readiness success/failure gating behavior,
+    - required-network reconciliation convergence/failure behavior,
+    - token reload success/failure behavior,
+    - backup retention and restore validation gating behavior.
   - Blocked by: Step 8.1 to Step 8.4.
-  - Reason: lifecycle test targets do not exist until lifecycle implementation is complete.
+  - Reason: lifecycle test targets do not exist until implementation of readiness/reconciliation/token/backup workflows is complete.
 
 Exit criteria:
-- [ ] Startup and worker flows fail closed when owned-controller lifecycle prerequisites are unmet.
-- [ ] Required networks exist and reconcile on the owned controller before request provisioning.
-- [ ] Controller token lifecycle and backup/restore paths are auditable and test-backed.
+- [ ] Startup and worker provisioning paths fail closed when self-hosted lifecycle readiness is unhealthy.
+- [ ] Required controller networks reconcile before member authorization attempts run.
+- [ ] Token reload control and backup/restore validation drill are auditable and test-backed.
 - [ ] Release profile behavior is validated without `ZT_CENTRAL_API_TOKEN` dependency.
   - Blocked by: Phase 11 Step 11.5.
   - Reason: release-gate validation is executed in staging during phase 11.
@@ -294,9 +300,13 @@ Verification:
 - [ ] `pytest tests/controller_lifecycle -q`
   - Blocked by: Step 8.1 to Step 8.5.
   - Reason: lifecycle test suite does not exist yet.
+- [ ] `pytest tests/provisioning -q -k lifecycle`
+  - Blocked by: Step 8.1 to Step 8.5.
+  - Reason: provisioning lifecycle-gate tests do not exist yet.
 - [ ] Manual checks:
-  - owned-controller bootstrap/readiness checks pass before worker provisioning starts
-  - controller backup/restore drill revalidates provisioning readiness
+  - readiness gate blocks provisioning while controller auth/probes fail
+  - required-network reconciliation completes before provisioning resumes
+  - backup -> restore drill revalidates readiness and reconciliation before reopening provisioning
 
 ## 11. Phase 9: Frontend Hardening
 Implements: PRD UX clarity and accessibility requirements.
