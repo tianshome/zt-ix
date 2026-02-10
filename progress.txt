@@ -549,3 +549,35 @@ Next
 
 Known bugs / regressions
 1. None identified for this documentation-only update.
+
+---
+
+Update: 2026-02-10 (Checklist + blocker tracking format applied to implementation plan)
+
+Decision
+1. `IMPLEMENTATION_PLAN.md` is now checklist-driven (`[x]` complete, `[ ]` open) with explicit blocker annotations.
+2. Queue dispatch from admin approve/retry is explicitly deferred to Phase 5 while retaining the current placeholder hook.
+3. JSON responses for workflow "page" routes are accepted for the current state; UI/template integration is tracked as open and blocked until Phase 6 execution.
+
+Completed
+1. Rewrote `IMPLEMENTATION_PLAN.md` to Version 0.6 with:
+   - status checklists for all phases and verification items,
+   - explicit gap tracking through and beyond Phase 4,
+   - concrete blocker metadata (`Blocked by` + `Reason`) for queueing, frontend/UI integration, and route-server dependencies.
+2. Updated `AGENTS.md` to enforce:
+   - checklist-based implementation plan maintenance,
+   - explicit blocker documentation,
+   - required backfill of blocked gaps once dependencies are completed.
+
+In progress
+1. No implementation code changes in this update.
+
+Next
+1. Start Phase 5 Step 5.1 to Step 5.4:
+   - provider interface,
+   - `central` and `self_hosted_controller` adapters,
+   - Celery provider resolution and real queue dispatch replacing the placeholder hook.
+2. After Phase 5 stabilizes request/provisioning behavior, execute Phase 6 UI/template integration to replace JSON-only route responses for workflow pages.
+
+Known bugs / regressions
+1. No runtime regressions identified; this update is documentation-only.

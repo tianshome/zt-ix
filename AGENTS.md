@@ -17,6 +17,14 @@ This repository is built to be worked on with AI agents _without_ devolving into
    - Update `progress.txt` after every meaningful change so the next session does not restart from zero context.
 6. **Use consistent approved command prefixes.**
    - In environments with prefix-based escalation approvals, formulate commands so executable prefixes stay consistent (for example, `docker compose ...`, `uv run ...`) to minimize repeated approval prompts.
+7. **Implementation plan is checklist-driven.**
+   - `IMPLEMENTATION_PLAN.md` must track work using Markdown checkboxes (`[x]` complete, `[ ]` open).
+   - Keep status current whenever work changes completion state.
+8. **Blockers must be explicit and backfilled later.**
+   - For blocked checklist items, add both:
+     - `Blocked by: <phase/step dependency>`
+     - `Reason: <exact missing prerequisite>`
+   - When the dependency is completed, agents must return to the blocked item, implement it, and update its checkbox state.
 
 ## 1) Required documents (read in this order)
 
@@ -59,6 +67,8 @@ Create a plan that:
 - Lists concrete file paths you will touch/create.
 - Includes verification steps (tests, lint, manual checks).
 - Avoids scope creep (only what the current step requires).
+- Updates checklist status in `IMPLEMENTATION_PLAN.md` for any touched step.
+- Marks any newly identified blocked work with explicit dependency and reason.
 
 ### Step C — Execute (small, reviewable increments)
 
@@ -82,6 +92,7 @@ Update:
 
 - `progress.txt` (completed / in-progress / next / known bugs)
 - `lessons.md` (if you hit a recurring pitfall; add a rule to prevent repeats)
+- `IMPLEMENTATION_PLAN.md` checklist state for completed, open, and blocked items touched in the session
 
 ## 3) Scope control
 
@@ -153,6 +164,7 @@ When you finish a task, report:
 3. **How it maps to docs** (which PRD/flow/plan step)
 4. **Verification performed** (commands/tests/manual checks)
 5. **Next steps** (what remains, risks, known bugs)
+6. **Checklist/blocker updates** (what changed in `IMPLEMENTATION_PLAN.md`, and which blocked gaps must be revisited later)
 
 ---
 
