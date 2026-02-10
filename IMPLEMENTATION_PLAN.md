@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 0.4
+Version: 0.5
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -138,6 +138,9 @@ Verification:
 ## 7. Phase 5: ZeroTier and Route Server Provisioning (Route Server Option A)
 Implements: PRD `F4`, `F5`, `F6`, `F7`.
 
+### 7.1 Sub-phase 5A: Provider Foundation and Membership Provisioning
+Goal: complete provider-agnostic ZeroTier member provisioning and request-state handling before any route-server actions.
+
 Steps:
 1. Step 5.1: Create provider-agnostic provisioning interface and normalized response model.
 2. Step 5.2: Implement `central` adapter using ZeroTier Central API token auth.
@@ -147,14 +150,37 @@ Steps:
 6. Step 5.6: Persist membership details and expose them in request API.
 7. Step 5.7: Add failure handling and admin retry for provider/network/auth errors.
 8. Step 5.8: Add unit/integration tests for provider contract, adapter selection, and retry semantics.
-9. Step 5.9: Add route-server sync service that fans out to all configured remote route servers over SSH after successful ZeroTier member authorization.
-10. Step 5.10: Render explicit per-ASN BIRD peer snippets using ZeroTier-assigned endpoint addresses (one generated peer config per ASN, per route server).
-11. Step 5.11: Enforce ROA/RPKI validation in the generated BIRD configuration/policy path used by route-server peers.
-12. Step 5.12: Apply BIRD updates safely on each route server (`bird -p`, `birdc configure check`, timed `birdc configure`, confirm/rollback workflow) and capture per-server outcomes.
-13. Step 5.13: Transition request to `active` only if all configured route servers apply successfully; otherwise set `failed` with actionable error context and retry path.
-14. Step 5.14: Add tests for config rendering, SSH command orchestration, multi-route-server partial failures, and retry idempotency.
 
-Exit criteria:
+Self-contained outcomes:
+1. Both provider modes pass shared contract tests.
+2. Re-running the same provisioning request does not duplicate membership rows.
+3. Provider failures produce actionable `failed` context with admin retry support.
+
+### 7.2 Sub-phase 5B: Route Server Desired Config Generation
+Goal: generate deterministic per-ASN route-server configuration only after membership authorization succeeds.
+
+Steps:
+1. Step 5.9: Add route-server sync service that fans out to all configured remote route servers over SSH after successful ZeroTier member authorization.
+2. Step 5.10: Render explicit per-ASN BIRD peer snippets using ZeroTier-assigned endpoint addresses (one generated peer config per ASN, per route server).
+3. Step 5.11: Enforce ROA/RPKI validation in the generated BIRD configuration/policy path used by route-server peers.
+
+Self-contained outcomes:
+1. Each approved ASN yields explicit generated BIRD peer config on every configured route server.
+2. Generated BIRD policy path used by route-server peers includes ROA/RPKI validation.
+
+### 7.3 Sub-phase 5C: Route Server Apply and Convergence
+Goal: safely apply generated BIRD config to all route servers and converge request state to `active` or `failed`.
+
+Steps:
+1. Step 5.12: Apply BIRD updates safely on each route server (`bird -p`, `birdc configure check`, timed `birdc configure`, confirm/rollback workflow) and capture per-server outcomes.
+2. Step 5.13: Transition request to `active` only if all configured route servers apply successfully; otherwise set `failed` with actionable error context and retry path.
+3. Step 5.14: Add tests for config rendering, SSH command orchestration, multi-route-server partial failures, and retry idempotency.
+
+Self-contained outcomes:
+1. Request transitions to `active` only when all configured route servers succeed.
+2. Partial route-server failures are captured with retry-safe behavior.
+
+Phase 5 overall exit criteria:
 1. Both provider modes pass shared contract tests.
 2. Re-running same provisioning request does not duplicate membership rows.
 3. Each approved ASN yields explicit generated BIRD peer config on every configured route server.

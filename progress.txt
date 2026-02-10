@@ -524,3 +524,28 @@ Next
 
 Known bugs / regressions
 1. No regressions detected in local lint/type/tests for this scope.
+
+---
+
+Update: 2026-02-10 (Phase 5 split into self-contained sub-phases)
+
+Decision
+1. Phase 5 is now split into smaller documentation sub-phases while preserving original scope and step IDs (`5.1` through `5.14`).
+
+Completed
+1. Updated `IMPLEMENTATION_PLAN.md` to Version 0.5:
+   - Added Sub-phase 5A: Provider Foundation and Membership Provisioning.
+   - Added Sub-phase 5B: Route Server Desired Config Generation.
+   - Added Sub-phase 5C: Route Server Apply and Convergence.
+   - Added self-contained outcomes for each sub-phase.
+   - Kept consolidated Phase 5 exit criteria and verification section.
+
+In progress
+1. No implementation code changes in this update.
+
+Next
+1. Execute Sub-phase 5A steps (`5.1` to `5.8`) as the next implementation block.
+2. Keep route-server rendering (`5.9` to `5.11`) and apply/convergence (`5.12` to `5.14`) as separate follow-on blocks.
+
+Known bugs / regressions
+1. None identified for this documentation-only update.
