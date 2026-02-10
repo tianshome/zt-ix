@@ -27,6 +27,9 @@ class AppSettings:
     peeringdb_profile_url: str
     peeringdb_scopes: tuple[str, ...]
     peeringdb_http_timeout_seconds: float
+    local_auth_enabled: bool
+    local_auth_password_min_length: int
+    local_auth_pbkdf2_iterations: int
 
     @property
     def peeringdb_scope_param(self) -> str:
@@ -67,6 +70,15 @@ class AppSettings:
             ),
             peeringdb_scopes=scopes,
             peeringdb_http_timeout_seconds=_env_float("PEERINGDB_HTTP_TIMEOUT_SECONDS", 10.0),
+            local_auth_enabled=_env_bool("LOCAL_AUTH_ENABLED", True),
+            local_auth_password_min_length=max(
+                8,
+                _env_int("LOCAL_AUTH_PASSWORD_MIN_LENGTH", 12),
+            ),
+            local_auth_pbkdf2_iterations=max(
+                100_000,
+                _env_int("LOCAL_AUTH_PBKDF2_ITERATIONS", 390_000),
+            ),
         )
 
 

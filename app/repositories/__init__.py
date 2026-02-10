@@ -7,6 +7,7 @@ from app.repositories.errors import (
     RepositoryError,
 )
 from app.repositories.join_requests import JoinRequestRepository
+from app.repositories.local_credentials import LocalCredentialRepository
 from app.repositories.memberships import ZtMembershipRepository
 from app.repositories.oauth_state_nonces import (
     OauthStateConsumeResult,
@@ -14,6 +15,7 @@ from app.repositories.oauth_state_nonces import (
     OauthStateNonceRepository,
 )
 from app.repositories.user_asns import UserAsnRecord, UserAsnRepository
+from app.repositories.user_network_access import UserNetworkAccessRepository
 from app.repositories.users import UserRepository
 from app.repositories.zt_networks import ZtNetworkRepository
 
@@ -22,12 +24,14 @@ __all__ = [
     "DuplicateActiveRequestError",
     "InvalidStateTransitionError",
     "JoinRequestRepository",
+    "LocalCredentialRepository",
     "OauthStateConsumeResult",
     "OauthStateConsumeStatus",
     "OauthStateNonceRepository",
     "RepositoryError",
     "UserAsnRecord",
     "UserAsnRepository",
+    "UserNetworkAccessRepository",
     "UserRepository",
     "ZtMembershipRepository",
     "ZtNetworkRepository",

@@ -10,7 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.enums import RequestStatus
-from app.db.models import AppUser, AuditEvent, JoinRequest, OauthStateNonce, ZtNetwork
+from app.db.models import (
+    AppUser,
+    AuditEvent,
+    JoinRequest,
+    OauthStateNonce,
+    UserNetworkAccess,
+    ZtNetwork,
+)
 from app.integrations.peeringdb import (
     PeeringDBNetwork,
     PeeringDBTokenResponse,
@@ -288,11 +295,53 @@ def test_non_admin_is_rejected_from_admin_routes(
     assert admin_api_response.json()["error"]["code"] == "forbidden"
 
 
-def _seed_network(db_session: Session) -> None:
-    existing = db_session.get(ZtNetwork, "abcdef0123456789")
+def test_create_request_enforces_associated_network_access(
+    client: TestClient,
+    db_session: Session,
+    stub_peeringdb_client: StubPeeringDBClient,
+) -> None:
+    _seed_network(db_session, network_id="abcdef0123456789")
+    _seed_network(db_session, network_id="1234567890abcdef")
+
+    _authenticate_session(
+        client=client,
+        db_session=db_session,
+        stub_peeringdb_client=stub_peeringdb_client,
+        peeringdb_user_id=1701,
+        username="operator-1701",
+        asns=(64512,),
+    )
+    user = db_session.execute(select(AppUser).where(AppUser.peeringdb_user_id == 1701)).scalar_one()
+    db_session.add(
+        UserNetworkAccess(
+            user_id=user.id,
+            zt_network_id="1234567890abcdef",
+            source="local",
+        )
+    )
+    db_session.commit()
+
+    blocked_response = client.post(
+        "/api/v1/requests",
+        json={"asn": 64512, "zt_network_id": "abcdef0123456789"},
+    )
+    assert blocked_response.status_code == 403
+    blocked_body = blocked_response.json()["error"]
+    assert blocked_body["code"] == "network_not_authorized"
+    assert blocked_body["details"]["allowed_network_ids"] == ["1234567890abcdef"]
+
+    allowed_response = client.post(
+        "/api/v1/requests",
+        json={"asn": 64512, "zt_network_id": "1234567890abcdef"},
+    )
+    assert allowed_response.status_code == 201
+
+
+def _seed_network(db_session: Session, *, network_id: str = "abcdef0123456789") -> None:
+    existing = db_session.get(ZtNetwork, network_id)
     if existing is not None:
         return
-    db_session.add(ZtNetwork(id="abcdef0123456789", name="ZT IX Fabric", is_active=True))
+    db_session.add(ZtNetwork(id=network_id, name=f"ZT IX Fabric {network_id[-4:]}", is_active=True))
     db_session.commit()
 
 

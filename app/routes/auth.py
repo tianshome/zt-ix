@@ -8,6 +8,7 @@ from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from starlette.datastructures import URL
 from starlette.responses import RedirectResponse, Response
@@ -16,7 +17,9 @@ from app.auth import (
     generate_nonce,
     generate_pkce_verifier,
     generate_state,
+    normalize_login_username,
     pkce_code_challenge,
+    verify_password,
 )
 from app.config import AppSettings
 from app.dependencies import get_app_settings, get_db_session, get_peeringdb_client
@@ -27,6 +30,7 @@ from app.integrations.peeringdb import (
     validate_id_token_nonce,
 )
 from app.repositories.audit_events import AuditEventRepository
+from app.repositories.local_credentials import LocalCredentialRepository
 from app.repositories.oauth_state_nonces import (
     OauthStateConsumeStatus,
     OauthStateNonceRepository,
@@ -38,6 +42,23 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 SettingsDep = Annotated[AppSettings, Depends(get_app_settings)]
 DbSessionDep = Annotated[Session, Depends(get_db_session)]
 PeeringDBClientDep = Annotated[PeeringDBClientProtocol, Depends(get_peeringdb_client)]
+
+
+class LocalLoginPayload(BaseModel):
+    username: str
+    password: str
+
+    @field_validator("username")
+    @classmethod
+    def _normalize_username(cls, value: str) -> str:
+        return normalize_login_username(value)
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, value: str) -> str:
+        if not value:
+            raise ValueError("password is required")
+        return value
 
 
 @router.get("/login")
@@ -210,6 +231,94 @@ async def auth_callback(
     return RedirectResponse(str(request.url_for("onboarding_page")), status_code=302)
 
 
+@router.post("/local/login")
+async def auth_local_login(
+    request: Request,
+    payload: LocalLoginPayload,
+    settings: SettingsDep,
+    db_session: DbSessionDep,
+) -> Response:
+    audit_repo = AuditEventRepository(db_session)
+    if not settings.local_auth_enabled:
+        _audit_local_login_failure(
+            audit_repo,
+            login_username=payload.username,
+            failure_code="local_auth_disabled",
+        )
+        db_session.commit()
+        return _error_redirect(request, "local_auth_disabled")
+
+    credential_repo = LocalCredentialRepository(db_session)
+    credential = credential_repo.get_by_login_username(payload.username)
+
+    if credential is None:
+        _audit_local_login_failure(
+            audit_repo,
+            login_username=payload.username,
+            failure_code="invalid_credentials",
+        )
+        db_session.commit()
+        return _error_redirect(request, "local_invalid_credentials")
+
+    if not credential.is_enabled:
+        _audit_local_login_failure(
+            audit_repo,
+            actor_user_id=credential.user_id,
+            login_username=credential.login_username,
+            failure_code="credential_disabled",
+        )
+        db_session.commit()
+        return _error_redirect(request, "local_credential_disabled", detail="contact_support")
+
+    if not verify_password(password=payload.password, encoded_hash=credential.password_hash):
+        _audit_local_login_failure(
+            audit_repo,
+            actor_user_id=credential.user_id,
+            login_username=credential.login_username,
+            failure_code="invalid_credentials",
+        )
+        db_session.commit()
+        return _error_redirect(request, "local_invalid_credentials")
+
+    user = credential.user
+    asn_rows = UserAsnRepository(db_session).list_by_user_id(user.id)
+    if not asn_rows:
+        audit_repo.create_event(
+            action="auth.local_login.no_eligible_asn",
+            target_type="app_user",
+            target_id=str(user.id),
+            actor_user_id=user.id,
+            metadata={"login_username": credential.login_username},
+        )
+        db_session.commit()
+        return _error_redirect(request, "no_eligible_asn")
+
+    credential_repo.touch_last_login(credential)
+    request.session.clear()
+    request.session.update(
+        {
+            "user_id": str(user.id),
+            "peeringdb_user_id": user.peeringdb_user_id,
+            "is_admin": user.is_admin,
+            "authenticated_at": datetime.now(UTC).isoformat(),
+            "auth_mode": "local",
+        }
+    )
+
+    audit_repo.create_event(
+        action="auth.local_login.succeeded",
+        target_type="app_user",
+        target_id=str(user.id),
+        actor_user_id=user.id,
+        metadata={
+            "login_username": credential.login_username,
+            "authorized_asn_count": len(asn_rows),
+        },
+    )
+    db_session.commit()
+    return RedirectResponse(str(request.url_for("onboarding_page")), status_code=302)
+
+
 @router.get("/logout")
 async def auth_logout(
     request: Request,
@@ -277,3 +386,22 @@ def _nonce_error_detail(exc: PeeringDBNonceValidationError) -> str:
         "invalid id_token payload": "invalid_id_token_payload",
     }
     return detail_map.get(str(exc), "invalid_nonce_token")
+
+
+def _audit_local_login_failure(
+    audit_repo: AuditEventRepository,
+    *,
+    login_username: str,
+    failure_code: str,
+    actor_user_id: uuid.UUID | None = None,
+) -> None:
+    audit_repo.create_event(
+        action="auth.local_login.failed",
+        target_type="local_login",
+        target_id=login_username,
+        actor_user_id=actor_user_id,
+        metadata={
+            "code": failure_code,
+            "login_username": login_username,
+        },
+    )

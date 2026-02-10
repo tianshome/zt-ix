@@ -83,6 +83,9 @@ def workflow_settings() -> AppSettings:
         peeringdb_profile_url="https://auth.peeringdb.com/profile/v1",
         peeringdb_scopes=("openid", "profile", "email", "networks"),
         peeringdb_http_timeout_seconds=2.0,
+        local_auth_enabled=True,
+        local_auth_password_min_length=12,
+        local_auth_pbkdf2_iterations=100_000,
     )
 
 

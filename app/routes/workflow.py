@@ -23,6 +23,7 @@ from app.repositories.audit_events import AuditEventRepository
 from app.repositories.errors import DuplicateActiveRequestError, InvalidStateTransitionError
 from app.repositories.join_requests import JoinRequestRepository
 from app.repositories.user_asns import UserAsnRepository
+from app.repositories.user_network_access import UserNetworkAccessRepository
 from app.repositories.users import UserRepository
 from app.repositories.zt_networks import ZtNetworkRepository
 
@@ -236,6 +237,20 @@ def api_create_request(
             code="invalid_network",
             message="Target ZeroTier network was not found or is inactive.",
             details={"zt_network_id": payload.zt_network_id},
+        )
+
+    allowed_network_ids = UserNetworkAccessRepository(db_session).list_network_ids_by_user_id(
+        actor.user_id
+    )
+    if allowed_network_ids and network_row.id not in allowed_network_ids:
+        return _error_response(
+            status_code=403,
+            code="network_not_authorized",
+            message="You are not authorized to create requests for this network.",
+            details={
+                "zt_network_id": network_row.id,
+                "allowed_network_ids": sorted(allowed_network_ids),
+            },
         )
 
     request_repo = JoinRequestRepository(db_session)

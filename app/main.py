@@ -9,6 +9,7 @@ from app.config import AppSettings, get_settings
 from app.db.session import SessionLocal
 from app.integrations.peeringdb import PeeringDBClient
 from app.repositories.user_asns import UserAsnRepository
+from app.repositories.user_network_access import UserNetworkAccessRepository
 from app.repositories.zt_networks import ZtNetworkRepository
 from app.routes.auth import router as auth_router
 from app.routes.workflow import router as workflow_router
@@ -21,6 +22,9 @@ ERROR_MESSAGES: dict[str, str] = {
     "invalid_nonce": "OIDC nonce validation failed for the returned identity token.",
     "upstream_auth_failure": "PeeringDB token or profile request failed.",
     "no_eligible_asn": "No eligible ASN was found for this account.",
+    "local_auth_disabled": "Local login is disabled in this deployment.",
+    "local_invalid_credentials": "Invalid username or password.",
+    "local_credential_disabled": "This local account is disabled. Contact support.",
 }
 
 
@@ -65,6 +69,10 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         with app.state.session_maker() as session:
             asn_rows = UserAsnRepository(session).list_by_user_id(user_uuid)
             network_rows = ZtNetworkRepository(session).list_active()
+            network_access_repo = UserNetworkAccessRepository(session)
+            restricted_network_ids = network_access_repo.list_network_ids_by_user_id(user_uuid)
+            if restricted_network_ids:
+                network_rows = [row for row in network_rows if row.id in restricted_network_ids]
 
         return {
             "status": "ready",

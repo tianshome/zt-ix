@@ -42,7 +42,7 @@ class AppUser(Base):
     __tablename__ = "app_user"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    peeringdb_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
+    peeringdb_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True)
     username: Mapped[str] = mapped_column(Text, nullable=False)
     full_name: Mapped[str | None] = mapped_column(Text)
     email: Mapped[str | None] = mapped_column(Text)
@@ -64,9 +64,59 @@ class AppUser(Base):
         onupdate=func.now(),
     )
 
+    local_credential: Mapped[LocalCredential | None] = relationship(
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
     asns: Mapped[list[UserAsn]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    network_access: Mapped[list[UserNetworkAccess]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     requests: Mapped[list[JoinRequest]] = relationship(back_populates="user")
     audit_events: Mapped[list[AuditEvent]] = relationship(back_populates="actor_user")
+
+
+class LocalCredential(Base):
+    __tablename__ = "local_credential"
+    __table_args__ = (
+        CheckConstraint(
+            "login_username = lower(login_username)",
+            name="local_credential_login_username_lower",
+        ),
+        Index("idx_local_credential_user_id", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("app_user.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    login_username: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    is_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    user: Mapped[AppUser] = relationship(back_populates="local_credential")
 
 
 class UserAsn(Base):
@@ -127,8 +177,43 @@ class ZtNetwork(Base):
         onupdate=func.now(),
     )
 
+    user_access: Mapped[list[UserNetworkAccess]] = relationship(back_populates="zt_network")
     requests: Mapped[list[JoinRequest]] = relationship(back_populates="zt_network")
     memberships: Mapped[list[ZtMembership]] = relationship(back_populates="zt_network")
+
+
+class UserNetworkAccess(Base):
+    __tablename__ = "user_network_access"
+    __table_args__ = (
+        UniqueConstraint("user_id", "zt_network_id"),
+        Index("idx_user_network_access_user_id", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("app_user.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    zt_network_id: Mapped[str] = mapped_column(
+        String(16),
+        ForeignKey("zt_network.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="local",
+        server_default=text("'local'"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    user: Mapped[AppUser] = relationship(back_populates="network_access")
+    zt_network: Mapped[ZtNetwork] = relationship(back_populates="user_access")
 
 
 class JoinRequest(Base):
