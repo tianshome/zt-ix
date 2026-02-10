@@ -11,14 +11,17 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
+from app.config import AppSettings
 from app.db.enums import RequestStatus
 from app.db.models import AppUser, AuditEvent, JoinRequest, UserAsn, ZtMembership
 from app.dependencies import (
     SessionActor,
     get_admin_session_actor,
+    get_app_settings,
     get_db_session,
     get_session_actor,
 )
+from app.provisioning.tasks import enqueue_provision_join_request
 from app.repositories.audit_events import AuditEventRepository
 from app.repositories.errors import DuplicateActiveRequestError, InvalidStateTransitionError
 from app.repositories.join_requests import JoinRequestRepository
@@ -29,6 +32,7 @@ from app.repositories.zt_networks import ZtNetworkRepository
 
 router = APIRouter(tags=["workflow"])
 DbSessionDep = Annotated[Session, Depends(get_db_session)]
+SettingsDep = Annotated[AppSettings, Depends(get_app_settings)]
 
 
 class CreateJoinRequestPayload(BaseModel):
@@ -334,6 +338,7 @@ def api_admin_approve(
     request: Request,
     request_id: uuid.UUID,
     db_session: DbSessionDep,
+    settings: SettingsDep,
 ) -> JSONResponse:
     actor, auth_error = _require_api_actor(request, require_admin=True)
     if auth_error is not None:
@@ -355,7 +360,7 @@ def api_admin_approve(
     except InvalidStateTransitionError:
         return _invalid_transition_response(request_row)
 
-    _enqueue_provisioning_attempt(request_id=request_row.id)
+    _enqueue_provisioning_attempt(request_id=request_row.id, settings=settings)
     _write_status_audit_event(
         db_session=db_session,
         actor_user_id=actor.user_id,
@@ -422,6 +427,7 @@ def api_admin_retry(
     request: Request,
     request_id: uuid.UUID,
     db_session: DbSessionDep,
+    settings: SettingsDep,
 ) -> JSONResponse:
     actor, auth_error = _require_api_actor(request, require_admin=True)
     if auth_error is not None:
@@ -453,7 +459,7 @@ def api_admin_retry(
     except InvalidStateTransitionError:
         return _invalid_transition_response(request_row)
 
-    _enqueue_provisioning_attempt(request_id=request_row.id)
+    _enqueue_provisioning_attempt(request_id=request_row.id, settings=settings)
     _write_status_audit_event(
         db_session=db_session,
         actor_user_id=actor.user_id,
@@ -558,9 +564,8 @@ def _write_status_audit_event(
     )
 
 
-def _enqueue_provisioning_attempt(*, request_id: uuid.UUID) -> None:
-    # Phase 5 wires this into Celery/provider adapters.
-    _ = request_id
+def _enqueue_provisioning_attempt(*, request_id: uuid.UUID, settings: AppSettings) -> None:
+    enqueue_provision_join_request(request_id=request_id, settings=settings)
 
 
 def _serialize_user(user: AppUser) -> dict[str, Any]:

@@ -42,3 +42,21 @@ def test_from_env_clamps_local_auth_bounds(monkeypatch: pytest.MonkeyPatch) -> N
 
     assert settings.local_auth_password_min_length == 8
     assert settings.local_auth_pbkdf2_iterations == 100000
+
+
+def test_from_env_reads_provisioning_provider_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REDIS_URL", "redis://example:6379/9")
+    monkeypatch.setenv("ZT_PROVIDER", "self_hosted_controller")
+    monkeypatch.setenv("ZT_CENTRAL_BASE_URL", "https://central.example/api")
+    monkeypatch.setenv("ZT_CENTRAL_API_TOKEN", "central-secret")
+    monkeypatch.setenv("ZT_CONTROLLER_BASE_URL", "http://controller.example:9993/controller")
+    monkeypatch.setenv("ZT_CONTROLLER_AUTH_TOKEN", "controller-secret")
+
+    settings = AppSettings.from_env()
+
+    assert settings.redis_url == "redis://example:6379/9"
+    assert settings.zt_provider == "self_hosted_controller"
+    assert settings.zt_central_base_url == "https://central.example/api"
+    assert settings.zt_central_api_token == "central-secret"
+    assert settings.zt_controller_base_url == "http://controller.example:9993/controller"
+    assert settings.zt_controller_auth_token == "controller-secret"

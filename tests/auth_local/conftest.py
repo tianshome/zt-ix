@@ -86,6 +86,12 @@ def auth_settings() -> AppSettings:
         local_auth_enabled=True,
         local_auth_password_min_length=12,
         local_auth_pbkdf2_iterations=100_000,
+        redis_url="memory://",
+        zt_provider="central",
+        zt_central_base_url="https://api.zerotier.com/api/v1",
+        zt_central_api_token="test-central-token",
+        zt_controller_base_url="http://127.0.0.1:9993/controller",
+        zt_controller_auth_token="test-controller-token",
     )
 
 

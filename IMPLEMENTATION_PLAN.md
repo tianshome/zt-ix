@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 0.7
+Version: 0.8
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -9,24 +9,22 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - `[ ]` open and not yet implemented.
 - `[ ]` + `Blocked by` + `Reason` marks an explicitly blocked gap that must be revisited when the dependency is complete.
 
-## 0.1 Current Status Snapshot (through Phase 4)
+## 0.1 Current Status Snapshot (through Phase 5A)
 - [x] Phase 1 bootstrap is complete.
 - [x] Phase 2 data/migration foundation is complete.
 - [x] Phase 3 auth integration (Auth Option A + Auth Option B) is complete for automated coverage.
 - [x] Phase 4 backend request workflow is complete for API + JSON route responses.
-- [x] Placeholder queue hook exists in admin approve/retry flow (`_enqueue_provisioning_attempt`).
+- [x] Phase 5 Sub-phase 5A provider foundation is complete (Step 5.1 to Step 5.8).
 - [ ] Configurable auto-approval mode is planned but not implemented.
-  - Blocked by: Phase 4 Step 4.7 and Phase 5 Step 5.4.
-  - Reason: approval-mode policy evaluation and real async dispatch are both required before enabling auto-approval.
-- [ ] Replace queue placeholder with real async dispatch.
-  - Blocked by: Phase 5 Step 5.1 to Step 5.4.
-  - Reason: queue target, payload contract, and provider-selection behavior are not implemented yet.
+  - Blocked by: Phase 4 Step 4.7.
+  - Reason: approval-mode policy evaluator behavior and guardrails are not implemented yet.
+- [x] Queue placeholder has been replaced with real async dispatch.
 - [ ] UI/template integration for onboarding/dashboard/request/admin flows.
   - Blocked by: Phase 6 Step 6.1 to Step 6.4.
   - Reason: current accepted scope uses JSON responses; frontend component/styling integration is deferred by plan.
 - [ ] Route-server integration (Route Server Option A).
-  - Blocked by: Phase 5 Sub-phase 5A completion (Step 5.1 to Step 5.8).
-  - Reason: route-server orchestration depends on finalized provider provisioning flow and stable membership outcomes.
+  - Blocked by: Phase 5 Sub-phase 5B and Sub-phase 5C implementation.
+  - Reason: route-server generation/apply logic has not been implemented yet.
 
 ## 1. Planning Assumptions and Open Questions
 - [x] Assumption: manual admin approval is the default decision control.
@@ -148,12 +146,10 @@ Steps:
 - [ ] Step 4.7: Add configurable approval mode support:
   - `manual_admin` (default): keep current admin decision path.
   - `policy_auto`: auto-transition policy-eligible `pending` requests to `approved` with explicit audit metadata.
-  - Blocked by: Phase 5 Step 5.4.
-  - Reason: auto-approved requests require real Celery dispatch/provider selection; placeholder queue hook is insufficient.
+  - Blocked by: Section 1 open question on auto-approval guardrails and policy rules.
+  - Reason: product/security sign-off and policy evaluator implementation are pending.
 - [x] Queueing placeholder retained for defer-to-phase-5 behavior (`_enqueue_provisioning_attempt`).
-- [ ] Replace queueing placeholder with real Celery task dispatch.
-  - Blocked by: Phase 5 Step 5.1 to Step 5.4.
-  - Reason: provider interface + adapter selection + worker dispatch contract are not implemented yet.
+- [x] Replace queueing placeholder with real Celery task dispatch.
 - [ ] Integrate rendered UI/templates for workflow pages (Jinja2/HTMX/Alpine).
   - Blocked by: Phase 6 Step 6.1 to Step 6.4.
   - Reason: JSON responses are accepted for the current state; frontend integration is intentionally deferred.
@@ -162,11 +158,9 @@ Exit criteria:
 - [x] Operator can submit request and track state via API and JSON route responses.
 - [x] Admin can approve/reject/retry with proper validation and auditing.
 - [ ] Approval mode is configurable (`manual_admin` default, `policy_auto` optional) with auditable decision outcomes.
-  - Blocked by: Step 4.7 and Phase 5 Step 5.4.
-  - Reason: policy evaluation path and real async dispatch are not implemented yet.
-- [ ] Admin approval/retry triggers async provisioning dispatch.
-  - Blocked by: Phase 5 Step 5.4.
-  - Reason: Celery/provider wiring not implemented yet.
+  - Blocked by: Step 4.7.
+  - Reason: policy evaluation path is not implemented yet.
+- [x] Admin approval/retry triggers async provisioning dispatch.
 - [ ] Operator/admin rendered UI pages match frontend guidelines.
   - Blocked by: Phase 6 Step 6.1 to Step 6.4.
   - Reason: template/UI layer not implemented yet.
@@ -188,30 +182,28 @@ Implements: PRD `F4`, `F5`, `F6`, `F7`.
 Goal: complete provider-agnostic ZeroTier member provisioning and request-state handling before any route-server actions.
 
 Steps:
-- [ ] Step 5.1: Create provider-agnostic provisioning interface and normalized response model.
-- [ ] Step 5.2: Implement `central` adapter using ZeroTier Central API token auth.
-- [ ] Step 5.3: Implement `self_hosted_controller` adapter using local controller API and `X-ZT1-Auth`.
-- [ ] Step 5.4: Update Celery task to resolve provider from `ZT_PROVIDER`.
-- [ ] Step 5.5: Add idempotent membership upsert and safe retry behavior shared across providers.
-- [ ] Step 5.6: Persist membership details and expose them in request API.
-- [ ] Step 5.7: Add failure handling and admin retry for provider/network/auth errors.
-- [ ] Step 5.8: Add unit/integration tests for provider contract, adapter selection, and retry semantics.
+- [x] Step 5.1: Create provider-agnostic provisioning interface and normalized response model.
+- [x] Step 5.2: Implement `central` adapter using ZeroTier Central API token auth.
+- [x] Step 5.3: Implement `self_hosted_controller` adapter using local controller API and `X-ZT1-Auth`.
+- [x] Step 5.4: Update Celery task to resolve provider from `ZT_PROVIDER`.
+- [x] Step 5.5: Add idempotent membership upsert and safe retry behavior shared across providers.
+- [x] Step 5.6: Persist membership details and expose them in request API.
+- [x] Step 5.7: Add failure handling and admin retry for provider/network/auth errors.
+- [x] Step 5.8: Add unit/integration tests for provider contract, adapter selection, and retry semantics.
 
 Self-contained outcomes:
-- [ ] Both provider modes pass shared contract tests.
-- [ ] Re-running the same provisioning request does not duplicate membership rows.
-- [ ] Provider failures produce actionable `failed` context with admin retry support.
+- [x] Both provider modes pass shared contract tests.
+- [x] Re-running the same provisioning request does not duplicate membership rows.
+- [x] Provider failures produce actionable `failed` context with admin retry support.
 
 ### 7.2 Sub-phase 5B: Route Server Desired Config Generation
 Goal: generate deterministic per-ASN route-server configuration only after membership authorization succeeds.
 
 Steps:
 - [ ] Step 5.9: Add route-server sync service that fans out to all configured remote route servers over SSH after successful ZeroTier member authorization.
-  - Blocked by: Step 5.1 to Step 5.8.
-  - Reason: route-server sync requires stable provider/membership outputs and finalized provisioning failure semantics.
 - [ ] Step 5.10: Render explicit per-ASN BIRD peer snippets using ZeroTier-assigned endpoint addresses.
-  - Blocked by: Step 5.1 to Step 5.9.
-  - Reason: rendering inputs depend on completed provisioning flow and route-server sync orchestration service.
+  - Blocked by: Step 5.9.
+  - Reason: rendering inputs depend on completed route-server sync orchestration service.
 - [ ] Step 5.11: Enforce ROA/RPKI validation in generated BIRD configuration/policy path.
   - Blocked by: Step 5.10.
   - Reason: policy enforcement is part of the generated config artifacts produced by the renderer.
@@ -239,13 +231,13 @@ Self-contained outcomes:
 - [ ] Partial route-server failures are captured with retry-safe behavior.
 
 Phase 5 overall exit criteria:
-- [ ] Both provider modes pass shared contract tests.
-- [ ] Re-running same provisioning request does not duplicate membership rows.
+- [x] Both provider modes pass shared contract tests.
+- [x] Re-running same provisioning request does not duplicate membership rows.
 - [ ] Each approved ASN yields explicit generated BIRD peer config on every configured route server.
 - [ ] BIRD route-server policy path used by generated peers includes ROA/RPKI validation.
 
 Verification:
-- [ ] `pytest tests/provisioning -q`
+- [x] `pytest tests/provisioning -q`
 - [ ] `pytest tests/route_servers -q`
 - [ ] Manual checks:
   - provider selection by `ZT_PROVIDER`

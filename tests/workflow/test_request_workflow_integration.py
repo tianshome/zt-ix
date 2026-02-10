@@ -16,6 +16,7 @@ from app.db.models import (
     JoinRequest,
     OauthStateNonce,
     UserNetworkAccess,
+    ZtMembership,
     ZtNetwork,
 )
 from app.integrations.peeringdb import (
@@ -124,6 +125,52 @@ def test_operator_dashboard_and_detail_are_user_scoped(
     cross_user_api_response = client.get(f"/api/v1/requests/{request_id}")
     assert cross_user_api_response.status_code == 404
     assert cross_user_api_response.json()["error"]["code"] == "request_not_found"
+
+
+def test_request_api_detail_includes_membership_when_present(
+    client: TestClient,
+    db_session: Session,
+    stub_peeringdb_client: StubPeeringDBClient,
+) -> None:
+    _seed_network(db_session)
+    _authenticate_session(
+        client=client,
+        db_session=db_session,
+        stub_peeringdb_client=stub_peeringdb_client,
+        peeringdb_user_id=1351,
+        username="operator-1351",
+        asns=(64531,),
+    )
+
+    create_response = client.post(
+        "/api/v1/requests",
+        json={"asn": 64531, "zt_network_id": "abcdef0123456789", "node_id": "abcde12345"},
+    )
+    request_id = create_response.json()["data"]["request"]["id"]
+    request_uuid = uuid.UUID(request_id)
+
+    request_row = db_session.execute(
+        select(JoinRequest).where(JoinRequest.id == request_uuid)
+    ).scalar_one()
+    request_row.status = RequestStatus.ACTIVE
+    db_session.add(
+        ZtMembership(
+            join_request_id=request_row.id,
+            zt_network_id=request_row.zt_network_id,
+            node_id="abcde12345",
+            member_id="member-xyz",
+            is_authorized=True,
+            assigned_ips=["10.0.0.5/32"],
+        )
+    )
+    db_session.commit()
+
+    detail_response = client.get(f"/api/v1/requests/{request_id}")
+    assert detail_response.status_code == 200
+    membership = detail_response.json()["data"]["request"]["membership"]
+    assert membership is not None
+    assert membership["member_id"] == "member-xyz"
+    assert membership["assigned_ips"] == ["10.0.0.5/32"]
 
 
 def test_admin_queue_filters_and_approve_reject_transitions(

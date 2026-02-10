@@ -605,3 +605,49 @@ Next
 
 Known bugs / regressions
 1. None identified for this documentation-only update.
+
+---
+
+Update: 2026-02-10 (Sub-phase 5A implemented in code)
+
+Completed
+1. Implemented Phase 5 Sub-phase 5A Step 5.1 provider contract foundation:
+   - Added provider-agnostic `ProvisionResult` model and provisioning provider protocol.
+   - Added normalized provider error taxonomy for auth/network/request failures.
+2. Implemented Step 5.2 and Step 5.3 provider adapters:
+   - Added ZeroTier Central adapter with token auth (`Authorization: token <token>`).
+   - Added self-hosted controller adapter with `X-ZT1-Auth` auth header.
+   - Added response normalization for member ID, authorization state, and assigned IPs.
+3. Implemented Step 5.4 Celery dispatch and provider-selection wiring:
+   - Added Celery task module and real queue dispatch from admin approve/retry paths.
+   - Added provider factory selection by `ZT_PROVIDER` with deterministic misconfiguration errors.
+4. Implemented Step 5.5 and Step 5.7 provisioning state machine and retry-safe behavior:
+   - Added provisioning service to transition `approved -> provisioning -> active|failed`.
+   - Added idempotent membership upsert behavior and deterministic failure persistence (`last_error`, retry increment).
+   - Added audit events for provisioning start/success/failure/skip branches.
+5. Implemented Step 5.6 request API membership visibility coverage:
+   - Confirmed request serialization includes membership payload when present.
+   - Added integration test coverage for membership inclusion in request detail API responses.
+6. Implemented Step 5.8 test coverage:
+   - Added provider contract tests for both adapters.
+   - Added provider factory selection and credential-validation tests.
+   - Added provisioning service tests for success, failure, skip, and idempotent upsert behavior.
+   - Added Celery task/dispatch behavior tests and provider-resolution path coverage.
+7. Updated implementation tracking docs:
+   - Updated `IMPLEMENTATION_PLAN.md` to Version 0.8 with Sub-phase 5A checklist completion and blocker/status updates.
+
+Verification
+1. `uv run ruff check .` passed.
+2. `uv run mypy .` passed.
+3. `uv run pytest tests/provisioning tests/workflow -q` passed.
+4. `uv run pytest -q` passed.
+
+In progress
+1. No active implementation tasks in this update.
+
+Next
+1. Implement Phase 5 Sub-phase 5B (Step 5.9 to Step 5.11): route-server sync service, deterministic BIRD peer rendering, and ROA/RPKI policy enforcement.
+2. Implement Phase 4 Step 4.7 configurable approval mode once policy guardrails are finalized.
+
+Known bugs / regressions
+1. No regressions detected in local lint/type/tests after Sub-phase 5A changes.

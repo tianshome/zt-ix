@@ -30,6 +30,12 @@ class AppSettings:
     local_auth_enabled: bool
     local_auth_password_min_length: int
     local_auth_pbkdf2_iterations: int
+    redis_url: str = "redis://localhost:6379/0"
+    zt_provider: str = "central"
+    zt_central_base_url: str = "https://api.zerotier.com/api/v1"
+    zt_central_api_token: str = ""
+    zt_controller_base_url: str = "http://127.0.0.1:9993/controller"
+    zt_controller_auth_token: str = ""
 
     @property
     def peeringdb_scope_param(self) -> str:
@@ -79,6 +85,15 @@ class AppSettings:
                 100_000,
                 _env_int("LOCAL_AUTH_PBKDF2_ITERATIONS", 390_000),
             ),
+            redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+            zt_provider=os.getenv("ZT_PROVIDER", "central").strip().lower(),
+            zt_central_base_url=os.getenv("ZT_CENTRAL_BASE_URL", "https://api.zerotier.com/api/v1"),
+            zt_central_api_token=os.getenv("ZT_CENTRAL_API_TOKEN", ""),
+            zt_controller_base_url=os.getenv(
+                "ZT_CONTROLLER_BASE_URL",
+                "http://127.0.0.1:9993/controller",
+            ),
+            zt_controller_auth_token=os.getenv("ZT_CONTROLLER_AUTH_TOKEN", ""),
         )
 
 
