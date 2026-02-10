@@ -1,5 +1,5 @@
 # Backend Structure
-Version: 0.1
+Version: 0.2
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
@@ -7,12 +7,20 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
 ## 1. Architecture Overview
 1. API server: FastAPI.
 2. Relational storage: PostgreSQL.
-3. Queue/worker: Celery + Redis for provisioning and reconciliation jobs.
+3. Queue and worker: Celery + Redis for provisioning and reconciliation jobs.
 4. External systems:
-   - PeeringDB OIDC/OAuth and REST API.
-   - ZeroTier provisioning provider: ZeroTier Central API or self-hosted ZeroTier controller API.
+   - PeeringDB OAuth endpoints and PeeringDB REST API.
+   - ZeroTier provisioning provider (`central` or `self_hosted_controller`).
 
-## 2. Database Schema (PostgreSQL)
+## 2. Core Domain Invariants
+1. A user is uniquely identified by `peeringdb_user_id`.
+2. A user can only create requests for ASNs currently linked to that user from PeeringDB.
+3. Only one active request exists per (`asn`, `zt_network_id`) across statuses:
+   - `pending`, `approved`, `provisioning`, `active`
+4. Request state transitions must follow `APP_FLOW.md`.
+5. `zt_membership` is one-to-one with `join_request` and unique per (`zt_network_id`, `node_id`).
+
+## 3. Database Schema (PostgreSQL)
 ```sql
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -115,55 +123,132 @@ CREATE UNIQUE INDEX uq_join_request_active_per_asn_network
 CREATE INDEX idx_audit_event_created_at ON audit_event(created_at);
 ```
 
-## 3. Auth Logic
-1. Initiate OIDC authorization flow with `state`, `nonce`, and PKCE.
-2. On callback, validate `state` and exchange authorization code for tokens.
-3. Use ID token/user info for identity; upsert `app_user`.
-4. Use bearer access token to query PeeringDB APIs and populate `user_asn`.
-5. Establish local session cookie (HTTP-only, Secure, SameSite=Lax).
+## 4. Authentication and Session Contract
+1. `/auth/login` starts OAuth authorization with `state`, `nonce`, and PKCE verifier.
+2. `/auth/callback` validates `state`, exchanges code for token set, and consumes one-time state row.
+3. Identity and ASN authorization context are loaded from PeeringDB profile/API calls before request creation is allowed.
+4. Local session cookie requirements:
+   - HTTP-only
+   - Secure in production
+   - SameSite=Lax
+5. Replay protection:
+   - Callback with used or expired `state` is rejected and audited.
 
-## 4. ZeroTier Provisioning Provider Contract
-1. Provisioning logic must consume a provider interface, not provider-specific call sites in workflow handlers.
+## 5. ZeroTier Provisioning Provider Contract
+1. Workflow code depends on provider interface, not provider-specific endpoints.
 2. Supported provider modes:
-   - `central`: ZeroTier Central API token auth.
-   - `self_hosted_controller`: ZeroTier local controller API auth via `X-ZT1-Auth`.
-3. Provider interface returns normalized fields for persistence:
-   - `member_id` (provider member identifier)
-   - `is_authorized` (boolean)
-   - `assigned_ips` (list of strings)
-   - `provider_name` (mode string for logs/metrics)
-4. Database schema remains unchanged for this decision; `zt_membership.member_id` stores provider-specific member identifier and must remain stable for idempotent retries.
+   - `central`: ZeroTier Central API (`Authorization: token <token>`)
+   - `self_hosted_controller`: local controller API (`X-ZT1-Auth: <token>`)
+3. Minimum provider interface methods:
+   - `validate_network(zt_network_id) -> bool`
+   - `authorize_member(zt_network_id, node_id, asn, request_id) -> ProvisionResult`
+4. `ProvisionResult` normalized fields:
+   - `member_id: str`
+   - `is_authorized: bool`
+   - `assigned_ips: list[str]`
+   - `provider_name: str`
+5. Idempotency rule:
+   - Calling `authorize_member` repeatedly for same request/node/network must converge on one persisted membership row.
 
-## 5. API Contract (v1)
+## 6. API Contract (v1)
+All API responses are JSON.
+
+### 6.1 Success envelope
+```json
+{
+  "data": {}
+}
+```
+
+### 6.2 Error envelope
+```json
+{
+  "error": {
+    "code": "string",
+    "message": "string",
+    "details": {}
+  }
+}
+```
+
+### 6.3 Endpoints
 1. `GET /api/v1/me`
-   - Returns current user profile and linked ASNs.
+   - Auth: user session required.
+   - `200`: user profile + linked ASNs.
+   - `401`: unauthenticated.
 2. `GET /api/v1/asns`
-   - Returns ASNs user can act on.
+   - Auth: user session required.
+   - `200`: eligible ASN list.
+   - `401`: unauthenticated.
 3. `POST /api/v1/requests`
-   - Input: `asn`, `zt_network_id`, optional `node_id`, optional `notes`.
-   - Output: created request with `pending` status.
+   - Auth: user session required.
+   - Body: `asn`, `zt_network_id`, optional `node_id`, optional `notes`.
+   - `201`: request created in `pending`.
+   - `400`: validation error.
+   - `403`: ASN not authorized for user.
+   - `409`: duplicate active request.
 4. `GET /api/v1/requests`
-   - List current user requests.
+   - Auth: user session required.
+   - `200`: user-owned request list.
 5. `GET /api/v1/requests/{request_id}`
-   - Return request detail including membership (if active).
+   - Auth: user session required.
+   - `200`: request detail + membership if present.
+   - `404`: not found or not visible to caller.
 6. `POST /api/v1/admin/requests/{request_id}/approve`
-   - Admin-only. Marks approved and queues provisioning job.
+   - Auth: admin required.
+   - `200`: status set `approved`, job queued.
+   - `403`: not admin.
+   - `409`: invalid current state.
 7. `POST /api/v1/admin/requests/{request_id}/reject`
-   - Admin-only. Requires `reject_reason`.
+   - Auth: admin required.
+   - Body: `reject_reason` required.
+   - `200`: status set `rejected`.
+   - `400`: missing reason.
+   - `403`: not admin.
+   - `409`: invalid current state.
 8. `POST /api/v1/admin/requests/{request_id}/retry`
-   - Admin-only. Requeues failed request.
+   - Auth: admin required.
+   - `200`: status set `approved`, job requeued.
+   - `403`: not admin.
+   - `409`: request is not `failed`.
 
-## 6. Storage and Secret Rules
-1. ZeroTier provider secrets (Central API token or self-hosted controller auth token) must never be stored in plaintext DB rows.
-2. Secret source: environment secret manager at runtime.
-3. `ZT_PROVIDER` selects provider mode; startup validation must fail if required provider credentials are missing.
-4. OAuth transient values (`state`, `nonce`, verifier) are short-lived and purged after use or expiration.
-5. Access tokens from PeeringDB are stored encrypted only if needed for asynchronous refresh; otherwise keep in server session.
+## 7. Worker and Retry Contract
+1. Worker only consumes requests in `approved` state.
+2. Worker sets status to `provisioning` before external provider call.
+3. On success:
+   - upsert `zt_membership`
+   - set request `active`
+   - set `provisioned_at`
+4. On failure:
+   - set request `failed`
+   - increment `retry_count`
+   - persist `last_error`
+5. Retry execution is explicit admin action for terminal `failed` records.
+6. Automatic retries for transient network/provider failures are allowed only within one worker attempt boundary and must be bounded.
 
-## 7. Edge Cases
+## 8. Storage and Secret Rules
+1. Provider secrets (Central API token or controller auth token) are never stored in plaintext DB rows.
+2. Secret source is runtime environment or external secret manager.
+3. `ZT_PROVIDER` selects provider mode; startup validation fails if mode is invalid or required credentials are missing.
+4. OAuth transient values (`state`, `nonce`, verifier) are short-lived and purged after use or expiry.
+5. PeeringDB access tokens are stored encrypted only when required for async behavior; otherwise kept in session context only.
+
+## 9. Required Environment Variables
+1. `APP_SECRET_KEY`
+2. `DATABASE_URL`
+3. `REDIS_URL`
+4. `PEERINGDB_CLIENT_ID`
+5. `PEERINGDB_CLIENT_SECRET`
+6. `PEERINGDB_REDIRECT_URI`
+7. `ZT_PROVIDER` (`central|self_hosted_controller`)
+8. `ZT_CENTRAL_API_TOKEN` (required when `ZT_PROVIDER=central`)
+9. `ZT_CONTROLLER_BASE_URL` (required when `ZT_PROVIDER=self_hosted_controller`)
+10. `ZT_CONTROLLER_AUTH_TOKEN` (required when `ZT_PROVIDER=self_hosted_controller`)
+
+## 10. Edge Cases
 1. Callback replay with used `state`: reject and audit.
 2. PeeringDB account with no eligible ASN: block request creation.
-3. Concurrent approval actions: first write wins, second receives conflict response.
-4. ZeroTier network not found or inactive in the configured provider: fail fast before queueing.
-5. Provisioning timeout: status `failed`, increment retry counter, retain error context.
-6. Invalid provider mode or missing provider credentials: fail fast at app startup and log explicit remediation guidance.
+3. Concurrent approve/reject operations: first write wins, later action gets conflict.
+4. Target ZeroTier network not found/inactive in configured provider: return failure with actionable admin guidance.
+5. Provisioning timeout or rate limit: preserve error context and enforce bounded retry behavior.
+6. Invalid provider mode or missing credentials: fail fast at startup with clear remediation logs.

@@ -1,5 +1,5 @@
 # Technical Stack
-Version: 0.1
+Version: 0.2
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
@@ -42,19 +42,42 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 3. ruff 0.8.6
 4. mypy 1.14.1
 
-## 9. Packaging/Tooling
+## 9. Packaging and Tooling
 1. uv 0.5.20
 2. Docker Engine 27.4.1
 3. Docker Compose v2.32.1
 
-## 10. External APIs
-1. PeeringDB OIDC/OAuth endpoints from `auth.peeringdb.com` and docs in `docs.peeringdb.com`.
-2. PeeringDB data APIs under `https://www.peeringdb.com/api/`.
-3. ZeroTier Central API v1 at `https://api.zerotier.com/api/v1` (provider mode: `central`).
-4. ZeroTier local controller API at `http://127.0.0.1:9993/controller/...` using `X-ZT1-Auth` (provider mode: `self_hosted_controller`).
-5. Provider mode is configuration-driven via `ZT_PROVIDER=central|self_hosted_controller`.
+## 10. External Integrations (Authoritative Endpoints and Auth)
+1. PeeringDB OAuth2 endpoints:
+   - Authorization endpoint: `https://auth.peeringdb.com/oauth2/authorize/`
+   - Token endpoint: `https://auth.peeringdb.com/oauth2/token/`
+   - Profile endpoint (claims + network context): `https://auth.peeringdb.com/profile/v1`
+2. PeeringDB OAuth scopes used by this app are from documented scope names:
+   - `profile`
+   - `email`
+   - `networks`
+3. PeeringDB REST data API base URL: `https://www.peeringdb.com/api/`
+4. ZeroTier Central API:
+   - Base URL: `https://api.zerotier.com/api/v1`
+   - Auth header format: `Authorization: token <token>`
+5. ZeroTier self-hosted controller API:
+   - Base URL: `http://127.0.0.1:9993/controller`
+   - Auth header: `X-ZT1-Auth: <token>`
+6. Provisioning mode is configuration-driven:
+   - `ZT_PROVIDER=central|self_hosted_controller`
 
-## 11. Version Pinning Policy
+## 11. External API Constraints
+1. ZeroTier Central API rate limits are plan-dependent; provisioning worker must handle HTTP `429` with bounded retries and backoff.
+2. PeeringDB OAuth scopes and profile payload shape are treated as external contracts and must be validated in integration tests.
+3. Provider-specific behavior differences are isolated behind the contract defined in `BACKEND_STRUCTURE.md`.
+
+## 12. Version Pinning Policy
 1. All Python dependencies must be pinned in `pyproject.toml` and lockfile (`uv.lock`) to exact versions above.
 2. Container image tags must use fixed versions, not `latest`.
 3. Any version change requires updating this file and changelog entry.
+
+## 13. Source References (Official Docs)
+1. PeeringDB OAuth docs: `https://docs.peeringdb.com/oauth/`
+2. PeeringDB API auth docs: `https://docs.peeringdb.com/howto/authenticate/`
+3. ZeroTier Central API docs: `https://docs.zerotier.com/api/central/v1/`
+4. ZeroTier service/local controller API docs: `https://docs.zerotier.com/api/service/v1/`
