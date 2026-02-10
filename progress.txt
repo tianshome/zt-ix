@@ -581,3 +581,27 @@ Next
 
 Known bugs / regressions
 1. No runtime regressions identified; this update is documentation-only.
+
+---
+
+Update: 2026-02-10 (Implementation plan marks auto-approval as configurable)
+
+Decision
+1. Auto-approval is now tracked in planning as a configurable approval mode while keeping manual admin approval as the default.
+
+Completed
+1. Updated `IMPLEMENTATION_PLAN.md` to Version 0.7:
+   - Marked policy auto-approval as a configurable option in planning assumptions.
+   - Added explicit Phase 4 checklist item (Step 4.7) for configurable approval-mode support.
+   - Added blocker metadata tying auto-approval execution to real async dispatch wiring in Phase 5.
+   - Added matching exit-criteria and verification checklist entries for approval-mode behavior and audit coverage.
+
+In progress
+1. No implementation code changes in this update.
+
+Next
+1. Implement Phase 5 Step 5.1 to Step 5.4 (provider wiring + real Celery dispatch), then execute Phase 4 Step 4.7 for configurable approval-mode behavior.
+2. Finalize product/security guardrails for auto-approval eligibility and fallback behavior before implementation.
+
+Known bugs / regressions
+1. None identified for this documentation-only update.

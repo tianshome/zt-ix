@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 0.6
+Version: 0.7
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -15,6 +15,9 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] Phase 3 auth integration (Auth Option A + Auth Option B) is complete for automated coverage.
 - [x] Phase 4 backend request workflow is complete for API + JSON route responses.
 - [x] Placeholder queue hook exists in admin approve/retry flow (`_enqueue_provisioning_attempt`).
+- [ ] Configurable auto-approval mode is planned but not implemented.
+  - Blocked by: Phase 4 Step 4.7 and Phase 5 Step 5.4.
+  - Reason: approval-mode policy evaluation and real async dispatch are both required before enabling auto-approval.
 - [ ] Replace queue placeholder with real async dispatch.
   - Blocked by: Phase 5 Step 5.1 to Step 5.4.
   - Reason: queue target, payload contract, and provider-selection behavior are not implemented yet.
@@ -26,14 +29,15 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
   - Reason: route-server orchestration depends on finalized provider provisioning flow and stable membership outcomes.
 
 ## 1. Planning Assumptions and Open Questions
-- [x] Assumption: phase 1 uses admin approval as default decision control.
+- [x] Assumption: manual admin approval is the default decision control.
 - [x] Assumption: provider mode is selected by `ZT_PROVIDER` and cannot be switched per-request.
 - [x] Assumption: local development uses Docker Compose for PostgreSQL/Redis and `uv run` for API/worker/tests.
 - [x] Assumption: authentication planning uses Auth Option A (local credentials) and Auth Option B (PeeringDB OAuth).
 - [x] Assumption: route-server automation in this plan follows Route Server Option A (worker-driven SSH orchestration).
 - [x] Requirement: each approved ASN must produce explicit generated BIRD peer config on every configured route server.
 - [x] Requirement: generated BIRD policy path must enable ROA/RPKI validation for route acceptance decisions.
-- [ ] Open question: policy-based auto-approval scope (if any) remains deferred pending product decision.
+- [x] Requirement: policy auto-approval is a configurable option, with manual admin approval remaining the default mode.
+- [ ] Open question: exact auto-approval policy guardrails (eligibility checks, fallback behavior, and rate-limit posture) still need product/security sign-off.
 - [ ] Open question: target retry limits/backoff constants should be finalized before phase 5 implementation.
 - [x] Open question resolved: for Auth Option A, empty associated-network assignment means unrestricted access when no rows exist.
 
@@ -141,6 +145,11 @@ Steps:
 - [x] Step 4.4: Build admin queue/detail and approve/reject/retry APIs with role checks.
 - [x] Step 4.5: Emit audit events for all workflow state transitions.
 - [x] Step 4.6: Add API and JSON-route tests for transitions, conflict handling, and associated-network authorization failures.
+- [ ] Step 4.7: Add configurable approval mode support:
+  - `manual_admin` (default): keep current admin decision path.
+  - `policy_auto`: auto-transition policy-eligible `pending` requests to `approved` with explicit audit metadata.
+  - Blocked by: Phase 5 Step 5.4.
+  - Reason: auto-approved requests require real Celery dispatch/provider selection; placeholder queue hook is insufficient.
 - [x] Queueing placeholder retained for defer-to-phase-5 behavior (`_enqueue_provisioning_attempt`).
 - [ ] Replace queueing placeholder with real Celery task dispatch.
   - Blocked by: Phase 5 Step 5.1 to Step 5.4.
@@ -152,6 +161,9 @@ Steps:
 Exit criteria:
 - [x] Operator can submit request and track state via API and JSON route responses.
 - [x] Admin can approve/reject/retry with proper validation and auditing.
+- [ ] Approval mode is configurable (`manual_admin` default, `policy_auto` optional) with auditable decision outcomes.
+  - Blocked by: Step 4.7 and Phase 5 Step 5.4.
+  - Reason: policy evaluation path and real async dispatch are not implemented yet.
 - [ ] Admin approval/retry triggers async provisioning dispatch.
   - Blocked by: Phase 5 Step 5.4.
   - Reason: Celery/provider wiring not implemented yet.
@@ -162,6 +174,9 @@ Exit criteria:
 Verification:
 - [x] `pytest tests/workflow -q`
 - [x] Automated checks for duplicate conflict, reject-without-reason, and associated-network restrictions.
+- [ ] Automated checks for approval-mode behavior (`manual_admin` and `policy_auto`) and audit emission.
+  - Blocked by: Step 4.7.
+  - Reason: configurable approval-mode logic is not implemented yet.
 - [ ] Manual UI checks for rendered pages.
   - Blocked by: Phase 6 UI implementation is not complete.
   - Reason: current routes are JSON responses by design.
