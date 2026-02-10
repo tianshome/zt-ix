@@ -355,3 +355,28 @@ Next
 
 Known bugs / regressions
 1. No regressions detected in local automated checks for this scope.
+
+---
+
+Update: 2026-02-10 (PeeringDB OAuth registration algorithm lesson documented)
+
+Decision
+1. Captured a live-integration lesson that successful PeeringDB OIDC callback in this project also depends on OAuth app registration algorithm set to `RSA with SHA-2 256` (RS256).
+
+Completed
+1. Updated Phase 3 manual integration guidance in `README.md`:
+   - Added explicit OAuth registration prerequisite to set algorithm `RSA with SHA-2 256` (RS256).
+2. Updated `TECH_STACK.md` external API constraints:
+   - Added PeeringDB registration algorithm requirement as an integration contract note.
+3. Replaced `lessons.md` TODO stub with a concrete lesson entry:
+   - Symptom, root cause, prevention rule, and good-vs-bad example for the nonce failure scenario.
+
+In progress
+1. No active implementation tasks.
+
+Next
+1. Keep this registration prerequisite in onboarding/checklist docs for any future environment setup.
+2. If additional live-auth pitfalls appear, append them to `lessons.md` and Phase 3 README checklist.
+
+Known bugs / regressions
+1. None identified for this documentation-only update.

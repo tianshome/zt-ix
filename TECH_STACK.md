@@ -78,7 +78,8 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 ## 11. External API Constraints
 1. ZeroTier Central API rate limits are plan-dependent; provisioning worker must handle HTTP `429` with bounded retries and backoff.
 2. PeeringDB OAuth scopes and profile payload shape are treated as external contracts and must be validated in integration tests.
-3. Provider-specific behavior differences are isolated behind the contract defined in `BACKEND_STRUCTURE.md`.
+3. PeeringDB OAuth app registration must use signing algorithm `RSA with SHA-2 256` (RS256) for the OIDC callback flow validated by this project.
+4. Provider-specific behavior differences are isolated behind the contract defined in `BACKEND_STRUCTURE.md`.
 
 ## 12. Version Pinning Policy
 1. All Python dependencies must be pinned in `pyproject.toml` and lockfile (`uv.lock`) to exact versions above.

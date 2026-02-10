@@ -52,6 +52,7 @@ Use these steps on a machine where a browser is available.
 1. Register or reuse a PeeringDB OAuth application:
    - Redirect URI must exactly match `PEERINGDB_REDIRECT_URI`.
    - Example: `http://localhost:8000/auth/callback`.
+   - Set OAuth signing algorithm to `RSA with SHA-2 256` (RS256) in PeeringDB app registration.
 2. Set runtime variables in `.env`:
    - `PEERINGDB_CLIENT_ID`
    - `PEERINGDB_CLIENT_SECRET`
