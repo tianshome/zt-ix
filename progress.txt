@@ -233,3 +233,33 @@ Known bugs / regressions
 Notes
 1. In this environment, host port `5433` was already allocated; verification used `POSTGRES_HOST_PORT=55433` while keeping repo defaults at `5433`.
 2. Added an AGENTS.md non-negotiable to keep escalation-sensitive commands on consistent prefixes (for example, `docker compose`, `uv run`) to reduce repeated approvals.
+
+---
+
+Update: 2026-02-10 (Implementation plan updated for route-server Option A + Option B TODO)
+
+Decision
+1. Route-server automation is now planned as Option A in active scope:
+   - Worker-driven SSH orchestration to remote Ubuntu/Linux route servers.
+   - Explicit generated BIRD peer configuration per ASN on every configured route server.
+   - ROA/RPKI validation required in the BIRD policy/configuration path for generated peers.
+2. Option B (persisted per-route-server state model) is deferred and tracked as a TODO phase after Phase 8.
+
+Completed
+1. Updated `IMPLEMENTATION_PLAN.md` to Version 0.3:
+   - Added Option A assumptions/requirements.
+   - Expanded Phase 5 steps and exit criteria for route-server sync via SSH.
+   - Added explicit per-ASN peer generation requirement.
+   - Added ROA/RPKI validation requirement.
+   - Added post-Phase-8 TODO section for Option B.
+
+In progress
+1. No implementation code changes in this update.
+
+Next
+1. Align `PRD.md`, `APP_FLOW.md`, and `BACKEND_STRUCTURE.md` with the new route-server Option A scope before implementation begins.
+2. Define environment/config contract for route-server SSH fanout (inventory, auth, command policy).
+3. Start Phase 3 auth implementation once scope docs are aligned.
+
+Known bugs / regressions
+1. None identified for this documentation-only update.

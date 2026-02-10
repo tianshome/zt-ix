@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 0.2
+Version: 0.3
 Date: 2026-02-10
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -10,8 +10,11 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 3. Assumption: local development uses the following dependency profile:
    - Docker Compose for PostgreSQL/Redis only
    - API and worker run directly via `uv run`
-4. Open question: policy-based auto-approval scope (if any) remains deferred pending product decision.
-5. Open question: target retry limits/backoff constants should be finalized before phase 5 implementation.
+4. Assumption: route-server automation in this plan follows "Option A" (worker-driven SSH orchestration to remote Ubuntu/Linux route servers).
+5. Requirement: each approved ASN must produce explicit generated BIRD peer config on every configured route server.
+6. Requirement: generated BIRD policy path must enable ROA/RPKI validation for route acceptance decisions.
+7. Open question: policy-based auto-approval scope (if any) remains deferred pending product decision.
+8. Open question: target retry limits/backoff constants should be finalized before phase 5 implementation.
 
 ## 2. Traceability Map
 1. PRD `F1` and `F2` map to phases 3 and 4.
@@ -20,6 +23,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 4. PRD `F6` and `F7` map to phases 4, 5, and 7.
 5. Frontend UX/accessibility requirements map to phase 6.
 6. Release and operational requirements map to phase 8.
+7. Route-server orchestration extension (Option A) maps to phase 5 and release validation in phase 8.
 
 ## 3. Phase 1: Project Bootstrap
 Implements: foundational requirements for all PRD features.
@@ -94,7 +98,7 @@ Verification:
    - duplicate request conflict path
    - reject-without-reason validation path
 
-## 7. Phase 5: ZeroTier Provisioning
+## 7. Phase 5: ZeroTier and Route Server Provisioning (Option A)
 Implements: PRD `F4`, `F5`, `F6`, `F7`.
 
 Steps:
@@ -106,16 +110,27 @@ Steps:
 6. Step 5.6: Persist membership details and expose them in request API.
 7. Step 5.7: Add failure handling and admin retry for provider/network/auth errors.
 8. Step 5.8: Add unit/integration tests for provider contract, adapter selection, and retry semantics.
+9. Step 5.9: Add route-server sync service that fans out to all configured remote route servers over SSH after successful ZeroTier member authorization.
+10. Step 5.10: Render explicit per-ASN BIRD peer snippets using ZeroTier-assigned endpoint addresses (one generated peer config per ASN, per route server).
+11. Step 5.11: Enforce ROA/RPKI validation in the generated BIRD configuration/policy path used by route-server peers.
+12. Step 5.12: Apply BIRD updates safely on each route server (`bird -p`, `birdc configure check`, timed `birdc configure`, confirm/rollback workflow) and capture per-server outcomes.
+13. Step 5.13: Transition request to `active` only if all configured route servers apply successfully; otherwise set `failed` with actionable error context and retry path.
+14. Step 5.14: Add tests for config rendering, SSH command orchestration, multi-route-server partial failures, and retry idempotency.
 
 Exit criteria:
 1. Both provider modes pass shared contract tests.
 2. Re-running same provisioning request does not duplicate membership rows.
+3. Each approved ASN yields explicit generated BIRD peer config on every configured route server.
+4. BIRD route-server policy path used by generated peers includes ROA/RPKI validation.
 
 Verification:
 1. `pytest tests/provisioning -q`
-2. Manual checks:
+2. `pytest tests/route_servers -q`
+3. Manual checks:
    - provider selection by `ZT_PROVIDER`
    - admin retry from `failed` state
+   - explicit per-ASN peer config rendered and deployed on each route server
+   - BIRD validation path confirms ROA/RPKI policy is enabled for generated peers
 
 ## 8. Phase 6: Frontend Hardening
 Implements: PRD UX clarity and accessibility requirements.
@@ -157,7 +172,7 @@ Implements: PRD definition-of-done completion.
 Steps:
 1. Step 8.1: Create deployment manifests and environment docs.
 2. Step 8.2: Execute end-to-end staging test using sandbox credentials.
-3. Step 8.3: Produce incident response and manual retry runbook.
+3. Step 8.3: Produce incident response and manual retry runbook (including route-server SSH/BIRD rollback procedures).
 4. Step 8.4: Tag `v0.1.0` when PRD acceptance criteria are fully met.
 
 Exit criteria:
@@ -167,3 +182,21 @@ Exit criteria:
 Verification:
 1. E2E staging checklist signed off.
 2. Final regression test pass before release tag.
+
+## 11. TODO: Phase 9 (Option B) - Persisted Route Server State Model
+Status: deferred until after Phase 8 completion.
+
+Steps:
+1. Step 9.1: Add persistent route-server inventory and per-request per-server sync tables/migrations.
+2. Step 9.2: Split route-server fanout into one queue job per route server with isolated retries and backoff.
+3. Step 9.3: Add reconciliation worker that compares desired state to BIRD effective state and repairs drift.
+4. Step 9.4: Expose per-route-server sync state and last error in admin request detail views.
+5. Step 9.5: Add tests for partial-failure convergence and per-server retry safety.
+
+Exit criteria:
+1. Per-route-server sync status is first-class persisted state, not audit metadata only.
+2. Partial route-server failures are independently visible and retryable without replaying all successful servers.
+
+Verification:
+1. `pytest tests/route_server_state -q`
+2. Manual check: one-route-server-down scenario converges after targeted retry.

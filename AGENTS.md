@@ -8,6 +8,7 @@ This repository is built to be worked on with AI agents _without_ devolving into
    - Do not write or modify implementation code until you have read the project’s spec docs (see §1).
 2. **No assumptions. Interrogate ambiguity.**
    - If anything is underspecified, ask questions (or write an explicit assumption list and get it approved) before implementing.
+   - When adding to the documentations following a brainstorming session, be sure to clarify what each "Option" is.
 3. **One source of truth.**
    - Requirements live in PRD/flows; design lives in frontend guidelines; data/contracts live in backend structure; sequence lives in implementation plan.
 4. **No “creative” tech choices.**
