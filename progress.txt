@@ -263,3 +263,53 @@ Next
 
 Known bugs / regressions
 1. None identified for this documentation-only update.
+
+---
+
+Update: 2026-02-10 (Phase 3 auth integration complete in code + automated tests)
+
+Completed
+1. Implemented Phase 3 Step 3.1 `/auth/login`:
+   - Added OAuth state/nonce/PKCE generation and persistence (`oauth_state_nonce`).
+   - Added redirect construction to PeeringDB authorize endpoint with PKCE challenge and nonce.
+2. Implemented Phase 3 Step 3.2 `/auth/callback`:
+   - Added one-time state consumption and expiry handling.
+   - Added token exchange path and nonce validation via `id_token` nonce claim.
+   - Added explicit callback failure codes and audit events.
+3. Implemented Phase 3 Step 3.3 user + ASN sync from PeeringDB profile:
+   - Added PeeringDB client abstraction for token/profile calls and profile normalization.
+   - Upserts local `app_user` and replaces `user_asn` mappings based on authorized networks.
+4. Implemented Phase 3 Step 3.4 session + logout behavior:
+   - Added signed cookie session middleware configuration.
+   - Added `/auth/logout` session clear + audit event.
+   - Added placeholder guarded `/onboarding` and `/error` routes for auth redirects.
+5. Implemented Phase 3 Step 3.5 integration-style auth tests (`tests/auth`):
+   - Success callback path.
+   - Invalid/missing state path.
+   - Token exchange failure path.
+   - Nonce mismatch path.
+   - Callback replay protection path.
+6. Added manual browser integration instructions for Phase 3 in `README.md` (required due no browser in this environment).
+7. Expanded `.env.example` with auth/session runtime settings (`APP_ENV`, session cookie flags, OAuth TTL/scopes/timeout).
+
+Verification
+1. `uv run ruff check .` passed.
+2. `uv run mypy .` passed.
+3. `uv run pytest tests/auth -q` passed.
+4. `uv run pytest -q` passed.
+
+In progress
+1. Phase 3 implementation complete.
+2. Real browser-based OIDC checks still pending execution outside this environment (instructions documented in `README.md`).
+
+Next
+1. Execute the README browser checklist against a real PeeringDB OAuth app and record outcomes.
+2. Start Phase 4 Step 4.1 request creation endpoint with ASN ownership checks.
+3. Add API auth helpers for current session user to support Phase 4 route guards.
+
+Known bugs / regressions
+1. No automated regressions detected in current local test suite.
+2. Nonce verification currently depends on `id_token` presence in token response; browser validation against live PeeringDB remains required.
+
+Notes
+1. Added test package `__init__.py` files to keep strict `mypy` module resolution stable with multiple `conftest.py` modules.
