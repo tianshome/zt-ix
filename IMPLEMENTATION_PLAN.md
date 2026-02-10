@@ -23,9 +23,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [ ] UI/template integration for onboarding/dashboard/request/admin flows.
   - Blocked by: Phase 9 Step 9.1 to Step 9.4.
   - Reason: current accepted scope uses JSON responses; frontend component/styling integration is deferred by plan.
-- [ ] Route-server integration (Route Server Option A).
-  - Blocked by: Phase 7 implementation.
-  - Reason: route-server apply/convergence logic has not been implemented yet.
+- [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
 - [ ] Self-hosted controller lifecycle ownership.
   - Blocked by: Phase 8 implementation.
   - Reason: bootstrap, network reconciliation, token lifecycle, and backup/restore flows are not implemented yet.
@@ -231,25 +229,20 @@ Implements: PRD `F4`, `F6`, `F8`.
 Goal: safely apply generated BIRD config to all route servers and converge request state to `active` or `failed`.
 
 Steps:
-- [ ] Step 7.1: Apply BIRD updates safely on each route server (`bird -p`, `birdc configure check`, timed `birdc configure`, confirm/rollback workflow) and capture per-server outcomes.
-- [ ] Step 7.2: Transition request to `active` only if all configured route servers apply successfully; otherwise set `failed` with actionable error context and retry path.
-  - Blocked by: Step 7.1.
-  - Reason: convergence logic depends on per-server apply outcomes.
-- [ ] Step 7.3: Add tests for config rendering, SSH command orchestration, multi-route-server partial failures, and retry idempotency.
-  - Blocked by: Step 7.1 and Step 7.2.
-  - Reason: apply/convergence behavior must exist before full route-server failure-mode tests are final.
+- [x] Step 7.1: Apply BIRD updates safely on each route server (`bird -p`, `birdc configure check`, timed `birdc configure`, confirm/rollback workflow) and capture per-server outcomes.
+- [x] Step 7.2: Transition request to `active` only if all configured route servers apply successfully; otherwise set `failed` with actionable error context and retry path.
+- [x] Step 7.3: Add tests for config rendering, SSH command orchestration, multi-route-server partial failures, and retry idempotency.
 
 Exit criteria:
-- [ ] Request transitions to `active` only when all configured route servers succeed.
-- [ ] Partial route-server failures are captured with retry-safe behavior.
+- [x] Request transitions to `active` only when all configured route servers succeed.
+- [x] Partial route-server failures are captured with retry-safe behavior.
 
 Verification:
-- [ ] `pytest tests/route_servers -q`
-  - Blocked by: Step 7.1 to Step 7.3.
-  - Reason: apply/convergence behavior is not implemented.
-- [ ] Manual checks:
-  - route-server apply succeeds across all configured servers for a provisioning attempt
-  - failed route-server apply captures actionable error context and supports retry idempotency
+- [x] `pytest tests/route_servers -q`
+- [x] `pytest tests/provisioning/test_service.py -q`
+- [x] `ZTIX_RUN_ROUTE_SERVER_INTEGRATION=1 uv run pytest tests/route_servers/test_live_integration.py -q -k live_route_server_creates_test_bgp_session`
+- [x] Manual check: route-server apply succeeds across all configured servers for a provisioning attempt.
+- [x] Manual check: failed route-server apply captures actionable error context and supports retry idempotency.
 
 ## 10. Phase 8: Self-Hosted Controller Lifecycle Ownership
 Implements: PRD `F4`, `F6`, `F7`, `F9`.

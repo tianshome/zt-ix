@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 from app.db.enums import RequestStatus
 from app.db.models import AppUser, AuditEvent, JoinRequest, ZtMembership, ZtNetwork
 from app.provisioning.providers.base import ProviderAuthError, ProvisionResult
-from app.provisioning.route_servers import RouteServerSyncError, RouteServerSyncResult
+from app.provisioning.route_servers import (
+    RouteServerHostFailure,
+    RouteServerSyncError,
+    RouteServerSyncResult,
+)
 from app.provisioning.service import (
     process_join_request_provisioning_with_provider,
 )
@@ -181,6 +185,71 @@ def test_route_server_sync_failure_sets_request_failed(db_session: Session) -> N
     assert refreshed.last_error is not None
     assert refreshed.last_error.startswith("route_server_sync_error")
 
+    failed_sync_events = (
+        db_session.execute(
+            select(AuditEvent)
+            .where(
+                AuditEvent.action == "route_server.sync.failed",
+                AuditEvent.target_id == str(request_row.id),
+            )
+            .order_by(AuditEvent.created_at.asc())
+        )
+        .scalars()
+        .all()
+    )
+    assert len(failed_sync_events) == 1
+    assert failed_sync_events[0].event_metadata["error_code"] == "route_server_sync_error"
+
+
+def test_route_server_partial_failure_metadata_is_recorded(db_session: Session) -> None:
+    request_row = _seed_join_request(
+        db_session,
+        status=RequestStatus.APPROVED,
+        node_id="abcde12345",
+    )
+    provider = StubProvider()
+    route_sync_service = StubRouteServerSyncService(
+        sync_error=RouteServerSyncError(
+            "partial route-server failure",
+            successful_results=[
+                RouteServerSyncResult(
+                    host="rs1.example.net",
+                    remote_path="/etc/bird/ztix-peers.d/ztix_as64512_req_deadbeef.conf",
+                    config_sha256="ok123",
+                )
+            ],
+            host_failures=[
+                RouteServerHostFailure(
+                    host="rs2.example.net",
+                    remote_path="/etc/bird/ztix-peers.d/ztix_as64512_req_deadbeef.conf",
+                    stage="birdc_configure_check",
+                    command="birdc configure check",
+                    detail="birdc check failed",
+                    rollback_attempted=True,
+                    rollback_succeeded=True,
+                )
+            ],
+        ),
+    )
+
+    process_join_request_provisioning_with_provider(
+        db_session=db_session,
+        request_id=request_row.id,
+        provider=provider,
+        route_server_sync_service=route_sync_service,
+    )
+
+    failed_sync_event = db_session.execute(
+        select(AuditEvent).where(
+            AuditEvent.action == "route_server.sync.failed",
+            AuditEvent.target_id == str(request_row.id),
+        )
+    ).scalar_one()
+    assert failed_sync_event.event_metadata["successful_server_count"] == 1
+    assert failed_sync_event.event_metadata["failed_server_count"] == 1
+    assert failed_sync_event.event_metadata["failed_servers"][0]["host"] == "rs2.example.net"
+    assert failed_sync_event.event_metadata["failed_servers"][0]["rollback_succeeded"] is True
+
 
 def test_missing_node_id_fails_with_actionable_error(db_session: Session) -> None:
     request_row = _seed_join_request(db_session, status=RequestStatus.APPROVED, node_id=None)
@@ -344,6 +413,52 @@ def test_failed_request_can_retry_after_admin_requeue(db_session: Session) -> No
     assert refreshed.status is RequestStatus.ACTIVE
     assert refreshed.retry_count == 0
     assert refreshed.last_error is None
+
+
+def test_route_server_failure_retry_remains_idempotent(db_session: Session) -> None:
+    request_row = _seed_join_request(
+        db_session,
+        status=RequestStatus.APPROVED,
+        node_id="abcde12345",
+    )
+    provider = StubProvider()
+    route_sync_service = StubRouteServerSyncService(
+        sync_error=RouteServerSyncError("route-server apply failed"),
+    )
+
+    process_join_request_provisioning_with_provider(
+        db_session=db_session,
+        request_id=request_row.id,
+        provider=provider,
+        route_server_sync_service=route_sync_service,
+    )
+    failed = db_session.get(JoinRequest, request_row.id)
+    assert failed is not None
+    assert failed.status is RequestStatus.FAILED
+    assert failed.retry_count == 1
+
+    JoinRequestRepository(db_session).transition_status(failed, RequestStatus.APPROVED)
+    db_session.commit()
+
+    route_sync_service.sync_error = None
+    process_join_request_provisioning_with_provider(
+        db_session=db_session,
+        request_id=request_row.id,
+        provider=provider,
+        route_server_sync_service=route_sync_service,
+    )
+
+    refreshed = db_session.get(JoinRequest, request_row.id)
+    assert refreshed is not None
+    assert refreshed.status is RequestStatus.ACTIVE
+    assert refreshed.retry_count == 1
+    assert refreshed.last_error is None
+    assert len(route_sync_service.sync_calls) == 2
+
+    membership_rows = db_session.execute(
+        select(ZtMembership).where(ZtMembership.join_request_id == request_row.id)
+    ).scalars()
+    assert len(list(membership_rows)) == 1
 
 
 def _seed_join_request(

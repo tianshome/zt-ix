@@ -34,7 +34,7 @@ def test_render_bird_peer_config_includes_roa_checks_and_peer_stanzas() -> None:
     assert rendered.count("protocol bgp") == 2
 
 
-def test_sync_desired_config_fans_out_to_all_configured_route_servers() -> None:
+def test_sync_desired_config_fans_out_and_applies_on_all_configured_route_servers() -> None:
     calls: list[tuple[list[str], str | None]] = []
 
     def command_runner(
@@ -65,25 +65,37 @@ def test_sync_desired_config_fans_out_to_all_configured_route_servers() -> None:
         result.remote_path.endswith(f"ztix_as64512_req_{request_id.hex}.conf")
         for result in results
     )
-    assert len(calls) == 4
+    assert all(result.apply_confirmed is True for result in results)
+    assert len(calls) == 16
     assert calls[0][0][-2] == "ztix@rs1.example.net"
-    assert calls[2][0][-2] == "ztix@rs2.example.net"
-    assert calls[1][1] is not None
-    assert "protocol bgp" in calls[1][1]
+    assert calls[8][0][-2] == "ztix@rs2.example.net"
+    write_payloads = [
+        stdin_data for command, stdin_data in calls if command[-1].startswith("cat > ")
+    ]
+    assert len(write_payloads) == 2
+    assert write_payloads[0] is not None
+    assert "protocol bgp" in write_payloads[0]
+    rs1_commands = [command[-1] for command, _ in calls if command[-2] == "ztix@rs1.example.net"]
+    assert "bird -p -c /etc/bird/bird.conf" in rs1_commands
+    assert "birdc configure check" in rs1_commands
+    assert "timeout 20s birdc configure" in rs1_commands
+    assert "birdc show status" in rs1_commands
 
 
-def test_sync_desired_config_aggregates_route_server_failures() -> None:
+def test_sync_desired_config_rolls_back_failed_host_and_aggregates_outcomes() -> None:
+    calls: list[tuple[list[str], str | None]] = []
+
     def command_runner(
         command: Sequence[str],
         stdin_data: str | None,
     ) -> subprocess.CompletedProcess[str]:
-        del stdin_data
-        if command[-2] == "ztix@rs2.example.net":
+        calls.append((list(command), stdin_data))
+        if command[-2] == "ztix@rs2.example.net" and command[-1] == "birdc configure check":
             return subprocess.CompletedProcess(
                 args=list(command),
-                returncode=255,
+                returncode=1,
                 stdout="",
-                stderr="permission denied",
+                stderr="birdc check failed",
             )
         return subprocess.CompletedProcess(args=list(command), returncode=0, stdout="", stderr="")
 
@@ -93,7 +105,7 @@ def test_sync_desired_config_aggregates_route_server_failures() -> None:
     )
     service = create_route_server_sync_service(settings, command_runner=command_runner)
 
-    with pytest.raises(RouteServerSyncError, match="rs2.example.net"):
+    with pytest.raises(RouteServerSyncError, match="rs2.example.net") as exc_info:
         service.sync_desired_config(
             request_id=uuid.uuid4(),
             asn=64512,
@@ -101,6 +113,20 @@ def test_sync_desired_config_aggregates_route_server_failures() -> None:
             node_id="abcde12345",
             assigned_ips=["10.0.0.2/32"],
         )
+    exc = exc_info.value
+    assert len(exc.successful_results) == 1
+    assert exc.successful_results[0].host == "rs1.example.net"
+    assert len(exc.host_failures) == 1
+    failure = exc.host_failures[0]
+    assert failure.host == "rs2.example.net"
+    assert failure.stage == "birdc_configure_check"
+    assert failure.rollback_attempted is True
+    assert failure.rollback_succeeded is True
+
+    rs2_commands = [command[-1] for command, _ in calls if command[-2] == "ztix@rs2.example.net"]
+    assert "birdc configure check" in rs2_commands
+    assert any(command.startswith("if [ -f ") and ".bak" in command for command in rs2_commands)
+    assert "timeout 20s birdc configure" in rs2_commands
 
 
 def test_render_bird_peer_config_requires_assigned_endpoint_ip() -> None:

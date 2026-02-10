@@ -1,4 +1,4 @@
-"""Route-server desired-config rendering and SSH fanout."""
+"""Route-server desired-config rendering, SSH fanout, and BIRD apply orchestration."""
 
 from __future__ import annotations
 
@@ -35,6 +35,17 @@ class RouteServerSyncError(Exception):
 
     error_code = "route_server_sync_error"
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        host_failures: Sequence[RouteServerHostFailure] | None = None,
+        successful_results: Sequence[RouteServerSyncResult] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.host_failures = tuple(host_failures or ())
+        self.successful_results = tuple(successful_results or ())
+
 
 class RouteServerConfigInputError(RouteServerSyncError):
     """Raised when rendering inputs are not sufficient for deterministic config."""
@@ -47,6 +58,47 @@ class RouteServerSyncResult:
     host: str
     remote_path: str
     config_sha256: str
+    apply_confirmed: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class RouteServerHostFailure:
+    host: str
+    remote_path: str
+    stage: str
+    command: str
+    detail: str
+    rollback_attempted: bool
+    rollback_succeeded: bool | None
+    rollback_error: str | None = None
+
+
+class _RouteServerHostCommandError(Exception):
+    def __init__(
+        self,
+        *,
+        host: str,
+        remote_path: str,
+        stage: str,
+        command: str,
+        returncode: int | None,
+        detail: str,
+    ) -> None:
+        self.host = host
+        self.remote_path = remote_path
+        self.stage = stage
+        self.command = command
+        self.returncode = returncode
+        self.detail = detail
+        super().__init__(
+            f"host={host} stage={stage} returncode={returncode} command={command!r} detail={detail}"
+        )
+
+
+class _RouteServerHostApplyError(Exception):
+    def __init__(self, failure: RouteServerHostFailure) -> None:
+        self.failure = failure
+        super().__init__(failure.detail)
 
 
 class RouteServerSyncer(Protocol):
@@ -59,7 +111,7 @@ class RouteServerSyncer(Protocol):
         node_id: str,
         assigned_ips: list[str],
     ) -> list[RouteServerSyncResult]:
-        """Write deterministic desired config to all configured route servers."""
+        """Write deterministic config and apply BIRD updates on each route server."""
 
 
 class RouteServerSyncService:
@@ -75,6 +127,8 @@ class RouteServerSyncService:
         ssh_known_hosts_file: str,
         remote_config_dir: str,
         route_server_local_asn: int,
+        bird_config_path: str = "/etc/bird/bird.conf",
+        birdc_configure_timeout_seconds: int = 20,
         command_runner: CommandRunner = _run_local_command,
     ) -> None:
         self._route_server_hosts = route_server_hosts
@@ -86,6 +140,8 @@ class RouteServerSyncService:
         self._ssh_known_hosts_file = ssh_known_hosts_file
         self._remote_config_dir = remote_config_dir.rstrip("/")
         self._route_server_local_asn = route_server_local_asn
+        self._bird_config_path = bird_config_path
+        self._birdc_configure_timeout_seconds = max(1, int(birdc_configure_timeout_seconds))
         self._command_runner = command_runner
 
     def sync_desired_config(
@@ -110,40 +166,194 @@ class RouteServerSyncService:
         )
         config_sha256 = hashlib.sha256(rendered_config.encode("utf-8")).hexdigest()
         remote_path = self._remote_path_for(request_id=request_id, asn=asn)
-        mkdir_command = f"mkdir -p {shlex.quote(self._remote_config_dir)}"
-        write_command = f"cat > {shlex.quote(remote_path)}"
 
         results: list[RouteServerSyncResult] = []
-        failures: list[str] = []
+        host_failures: list[RouteServerHostFailure] = []
         for host in self._route_server_hosts:
             try:
-                self._run_ssh(host=host, remote_command=mkdir_command)
-                self._run_ssh(
+                result = self._sync_and_apply_host(
                     host=host,
-                    remote_command=write_command,
-                    stdin_data=rendered_config,
+                    remote_path=remote_path,
+                    rendered_config=rendered_config,
+                    config_sha256=config_sha256,
                 )
-                results.append(
-                    RouteServerSyncResult(
-                        host=host,
-                        remote_path=remote_path,
-                        config_sha256=config_sha256,
-                    )
-                )
-            except RouteServerSyncError as exc:
-                failures.append(f"{host}: {exc}")
+                results.append(result)
+            except _RouteServerHostApplyError as exc:
+                host_failures.append(exc.failure)
 
-        if failures:
-            failure_list = "; ".join(failures)
-            message = "route-server sync failed for one or more hosts: " f"{failure_list}"
-            raise RouteServerSyncError(message)
+        if host_failures:
+            failure_list = "; ".join(
+                self._format_host_failure(failure) for failure in host_failures
+            )
+            message = "route-server sync/apply failed for one or more hosts: " f"{failure_list}"
+            raise RouteServerSyncError(
+                message,
+                host_failures=host_failures,
+                successful_results=results,
+            )
 
         return results
 
-    def _run_ssh(
+    def _sync_and_apply_host(
         self,
         *,
         host: str,
+        remote_path: str,
+        rendered_config: str,
+        config_sha256: str,
+    ) -> RouteServerSyncResult:
+        candidate_path = f"{remote_path}.candidate"
+        backup_path = f"{remote_path}.bak"
+
+        quoted_remote_dir = shlex.quote(self._remote_config_dir)
+        quoted_remote_path = shlex.quote(remote_path)
+        quoted_candidate_path = shlex.quote(candidate_path)
+        quoted_backup_path = shlex.quote(backup_path)
+        quoted_bird_config_path = shlex.quote(self._bird_config_path)
+        birdc_configure_command = (
+            f"timeout {self._birdc_configure_timeout_seconds}s birdc configure"
+        )
+
+        candidate_installed = False
+        try:
+            self._run_ssh_checked(
+                host=host,
+                remote_path=remote_path,
+                stage="prepare_directory",
+                remote_command=f"mkdir -p {quoted_remote_dir}",
+            )
+            self._run_ssh_checked(
+                host=host,
+                remote_path=remote_path,
+                stage="backup_existing_config",
+                remote_command=(
+                    f"if [ -f {quoted_remote_path} ]; then cp {quoted_remote_path} "
+                    f"{quoted_backup_path}; else rm -f {quoted_backup_path}; fi"
+                ),
+            )
+            self._run_ssh_checked(
+                host=host,
+                remote_path=remote_path,
+                stage="write_candidate_config",
+                remote_command=f"cat > {quoted_candidate_path}",
+                stdin_data=rendered_config,
+            )
+            self._run_ssh_checked(
+                host=host,
+                remote_path=remote_path,
+                stage="install_candidate_config",
+                remote_command=f"mv {quoted_candidate_path} {quoted_remote_path}",
+            )
+            candidate_installed = True
+
+            self._run_ssh_checked(
+                host=host,
+                remote_path=remote_path,
+                stage="bird_parse",
+                remote_command=f"bird -p -c {quoted_bird_config_path}",
+            )
+            self._run_ssh_checked(
+                host=host,
+                remote_path=remote_path,
+                stage="birdc_configure_check",
+                remote_command="birdc configure check",
+            )
+            self._run_ssh_checked(
+                host=host,
+                remote_path=remote_path,
+                stage="birdc_configure",
+                remote_command=birdc_configure_command,
+            )
+            self._run_ssh_checked(
+                host=host,
+                remote_path=remote_path,
+                stage="birdc_confirm",
+                remote_command="birdc show status",
+            )
+        except _RouteServerHostCommandError as command_error:
+            rollback_attempted = False
+            rollback_succeeded: bool | None = None
+            rollback_error: str | None = None
+            if candidate_installed:
+                rollback_attempted = True
+                rollback_succeeded, rollback_error = self._attempt_rollback(
+                    host=host,
+                    remote_path=remote_path,
+                    backup_path=backup_path,
+                    birdc_configure_command=birdc_configure_command,
+                )
+
+            raise _RouteServerHostApplyError(
+                RouteServerHostFailure(
+                    host=host,
+                    remote_path=remote_path,
+                    stage=command_error.stage,
+                    command=command_error.command,
+                    detail=command_error.detail,
+                    rollback_attempted=rollback_attempted,
+                    rollback_succeeded=rollback_succeeded,
+                    rollback_error=rollback_error,
+                )
+            ) from command_error
+
+        return RouteServerSyncResult(
+            host=host,
+            remote_path=remote_path,
+            config_sha256=config_sha256,
+            apply_confirmed=True,
+        )
+
+    def _attempt_rollback(
+        self,
+        *,
+        host: str,
+        remote_path: str,
+        backup_path: str,
+        birdc_configure_command: str,
+    ) -> tuple[bool, str | None]:
+        quoted_remote_path = shlex.quote(remote_path)
+        quoted_backup_path = shlex.quote(backup_path)
+        restore_command = (
+            f"if [ -f {quoted_backup_path} ]; then cp {quoted_backup_path} "
+            f"{quoted_remote_path}; else rm -f {quoted_remote_path}; fi"
+        )
+        try:
+            self._run_ssh_checked(
+                host=host,
+                remote_path=remote_path,
+                stage="rollback_restore_config",
+                remote_command=restore_command,
+            )
+            self._run_ssh_checked(
+                host=host,
+                remote_path=remote_path,
+                stage="rollback_birdc_configure",
+                remote_command=birdc_configure_command,
+            )
+        except _RouteServerHostCommandError as rollback_error:
+            return False, f"{rollback_error.stage}: {rollback_error.detail}"
+
+        return True, None
+
+    def _format_host_failure(self, failure: RouteServerHostFailure) -> str:
+        rollback_state = "not_attempted"
+        if failure.rollback_attempted:
+            rollback_state = "succeeded" if failure.rollback_succeeded else "failed"
+
+        rendered = (
+            f"{failure.host} stage={failure.stage} command={failure.command!r} "
+            f"detail={failure.detail} rollback={rollback_state}"
+        )
+        if failure.rollback_error:
+            rendered = f"{rendered} rollback_detail={failure.rollback_error}"
+        return rendered
+
+    def _run_ssh_checked(
+        self,
+        *,
+        host: str,
+        remote_path: str,
+        stage: str,
         remote_command: str,
         stdin_data: str | None = None,
     ) -> None:
@@ -151,8 +361,13 @@ class RouteServerSyncService:
         try:
             result = self._command_runner(command, stdin_data)
         except OSError as exc:
-            raise RouteServerSyncError(
-                f"ssh invocation failed for host={host} command={remote_command!r}: {exc}"
+            raise _RouteServerHostCommandError(
+                host=host,
+                remote_path=remote_path,
+                stage=stage,
+                command=remote_command,
+                returncode=None,
+                detail=f"ssh invocation failed: {exc}",
             ) from exc
 
         if result.returncode == 0:
@@ -165,12 +380,14 @@ class RouteServerSyncService:
             detail = detail[:240]
         else:
             detail = "no stderr/stdout output"
-        message = (
-            "ssh command failed for "
-            f"host={host} returncode={result.returncode} command={remote_command!r}; "
-            f"detail={detail}"
+        raise _RouteServerHostCommandError(
+            host=host,
+            remote_path=remote_path,
+            stage=stage,
+            command=remote_command,
+            returncode=result.returncode,
+            detail=detail,
         )
-        raise RouteServerSyncError(message)
 
     def _build_ssh_command(self, *, host: str, remote_command: str) -> list[str]:
         command = [

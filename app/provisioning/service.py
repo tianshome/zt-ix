@@ -20,6 +20,7 @@ from app.provisioning.providers import (
     create_provisioning_provider,
 )
 from app.provisioning.route_servers import (
+    RouteServerHostFailure,
     RouteServerSyncer,
     RouteServerSyncError,
     RouteServerSyncResult,
@@ -280,6 +281,16 @@ def _mark_failed(
         return
 
     old_status = request_row.status
+    route_server_failure_metadata = _route_server_failure_metadata(exc)
+    if route_server_failure_metadata is not None:
+        audit_repo.create_event(
+            action="route_server.sync.failed",
+            target_type="join_request",
+            target_id=str(request_row.id),
+            actor_user_id=request_row.user_id,
+            metadata=route_server_failure_metadata,
+        )
+
     request_repo.transition_status(
         request_row,
         RequestStatus.FAILED,
@@ -357,14 +368,52 @@ def _exception_message(exc: Exception) -> str:
     return f"{error_code}: {message}"
 
 
+def _route_server_failure_metadata(exc: Exception) -> dict[str, Any] | None:
+    if not isinstance(exc, RouteServerSyncError):
+        return None
+
+    metadata: dict[str, Any] = {
+        "error_code": exc.error_code,
+        "error": str(exc),
+    }
+
+    if exc.successful_results:
+        metadata["successful_server_count"] = len(exc.successful_results)
+        metadata["successful_servers"] = _serialize_route_server_results(exc.successful_results)
+    if exc.host_failures:
+        metadata["failed_server_count"] = len(exc.host_failures)
+        metadata["failed_servers"] = _serialize_route_server_failures(exc.host_failures)
+
+    return metadata
+
+
 def _serialize_route_server_results(
-    route_server_results: list[RouteServerSyncResult],
-) -> list[dict[str, str]]:
+    route_server_results: list[RouteServerSyncResult] | tuple[RouteServerSyncResult, ...],
+) -> list[dict[str, str | bool]]:
     return [
         {
             "host": result.host,
             "remote_path": result.remote_path,
             "config_sha256": result.config_sha256,
+            "apply_confirmed": result.apply_confirmed,
         }
         for result in route_server_results
+    ]
+
+
+def _serialize_route_server_failures(
+    route_server_failures: list[RouteServerHostFailure] | tuple[RouteServerHostFailure, ...],
+) -> list[dict[str, str | bool | None]]:
+    return [
+        {
+            "host": failure.host,
+            "remote_path": failure.remote_path,
+            "stage": failure.stage,
+            "command": failure.command,
+            "detail": failure.detail,
+            "rollback_attempted": failure.rollback_attempted,
+            "rollback_succeeded": failure.rollback_succeeded,
+            "rollback_error": failure.rollback_error,
+        }
+        for failure in route_server_failures
     ]

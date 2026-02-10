@@ -794,3 +794,84 @@ Next
 
 Known bugs / regressions
 1. None identified for this documentation-only update.
+
+---
+
+Update: 2026-02-10 (Phase 7 route-server apply + convergence completed, live check rerun successful)
+
+Completed
+1. Implemented Phase 7 Step 7.1 safe route-server apply workflow in `app/provisioning/route_servers.py`:
+   - Added per-host apply orchestration after config sync:
+     - `bird -p -c /etc/bird/bird.conf`
+     - `birdc configure check`
+     - timed `birdc configure` (`timeout 20s`)
+     - confirmation check (`birdc show status`)
+   - Added per-host failure-stage capture and best-effort rollback workflow using backup/restore of managed snippet file.
+2. Implemented Phase 7 Step 7.2 convergence gating and actionable failure context in `app/provisioning/service.py`:
+   - Request transitions to `active` only when all configured route servers complete sync/apply successfully.
+   - Added explicit route-server failure audit event (`route_server.sync.failed`) with structured per-host failure metadata and successful-host context.
+3. Implemented Phase 7 Step 7.3 test coverage:
+   - Extended `tests/route_servers/test_sync.py` for safe-apply command orchestration and partial-failure + rollback assertions.
+   - Extended `tests/provisioning/test_service.py` for route-server failure metadata assertions and retry idempotency after route-server failure.
+4. Updated implementation tracking checklist in `IMPLEMENTATION_PLAN.md`:
+   - Marked Phase 7 Step 7.1 to Step 7.3 complete.
+   - Marked Phase 7 exit criteria complete.
+   - Updated Phase 7 verification checklist with automated and manual status.
+
+Verification
+1. `uv run pytest tests/route_servers tests/provisioning/test_service.py -q` passed.
+2. `uv run ruff check .` passed.
+3. `uv run mypy .` passed.
+4. `uv run pytest -q` passed.
+5. Live integration check rerun against route server after access fixes:
+   - Host: `rs1.zsss.org`
+   - User: `ztixsync`
+   - Sequence passed: `bird -p -c /etc/bird/bird.conf` -> `birdc configure check` -> `timeout 20s birdc configure` -> `birdc show status`
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. If required, execute manual failure-injection runbook step for Phase 7 verification item:
+   - confirm live failed apply surfaces actionable error context and retry idempotency in deployed environment.
+2. Start Phase 8 Step 8.1 to Step 8.5 (self-hosted controller lifecycle ownership).
+
+Known bugs / regressions
+1. None detected in automated checks for this scope.
+
+Notes
+1. Integration checks required runtime host key material and SSH key-read access alignment in this environment before full remote validation succeeded.
+
+---
+
+Update: 2026-02-10 (Live integration test now creates a temporary BGP session)
+
+Completed
+1. Added live route-server integration test `tests/route_servers/test_live_integration.py` that:
+   - reads route-server SSH/runtime values from `runtime-config.yaml` (or `ZTIX_RUNTIME_CONFIG_PATH`),
+   - pushes a temporary managed snippet via `RouteServerSyncService`,
+   - runs safe apply path (`bird -p`, `birdc configure check`, timed `birdc configure`),
+   - validates the generated BGP protocol appears in `birdc show protocols all <name>`,
+   - removes the temporary snippet and reapplies config in cleanup.
+2. Added helper coverage in the same file for protocol-name extraction used by the live assertion path.
+3. Updated docs:
+   - `README.md` route-server section with an explicit live integration test command and required env vars.
+   - `IMPLEMENTATION_PLAN.md` Phase 7 verification checklist with the live integration test command.
+4. Executed live integration test against configured host (`rs1.zsss.org`) with runtime SSH credentials and temporary key-path override.
+
+Verification
+1. `uv run ruff check .` passed.
+2. `uv run mypy .` passed.
+3. `uv run pytest tests/route_servers tests/provisioning/test_service.py -q` passed.
+4. `uv run pytest -q` passed.
+5. `ZTIX_RUN_ROUTE_SERVER_INTEGRATION=1 ZTIX_ROUTE_SERVER_TEST_SSH_KEY_PATH=/tmp/ztix_route_server_ed25519 UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/route_servers/test_live_integration.py -q -k live_route_server_creates_test_bgp_session` passed.
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Execute the remaining Phase 7 manual failure-path check (inject apply failure and verify actionable error + retry idempotency).
+2. Start Phase 8 (self-hosted controller lifecycle ownership).
+
+Known bugs / regressions
+1. None detected in local or live-integration checks for this scope.

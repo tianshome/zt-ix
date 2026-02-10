@@ -177,3 +177,18 @@ On the route server, validate config syntax before any apply step:
 ```bash
 bird -p -c /etc/bird/bird.conf
 ```
+
+### 7) Live integration test creates a temporary BGP session
+Run the live integration test to create a temporary managed BGP protocol, verify it is
+visible in BIRD, and then clean up the snippet:
+
+```bash
+ZTIX_RUN_ROUTE_SERVER_INTEGRATION=1 \
+ZTIX_ROUTE_SERVER_TEST_SSH_KEY_PATH=/tmp/ztix_route_server_ed25519 \
+uv run pytest tests/route_servers/test_live_integration.py -q -k live_route_server_creates_test_bgp_session
+```
+
+Notes:
+- The test reads route-server host/user/port/path values from `runtime-config.yaml` by default.
+- Override config path with `ZTIX_RUNTIME_CONFIG_PATH=/path/to/runtime-config.yaml` if needed.
+- The test auto-runs `birdc configure check` and timed `birdc configure` during cleanup.
