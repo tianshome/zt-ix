@@ -11,6 +11,9 @@ auth:
     password_min_length: 12
     pbkdf2_iterations: 390000
 
+workflow:
+  approval_mode: manual_admin  # manual_admin | policy_auto
+
 peeringdb:
   scopes:
     - openid

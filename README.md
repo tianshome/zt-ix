@@ -1,6 +1,6 @@
 # ZT Internet Exchange
 
-ZT-IX control plane for virtual Internet Exchange onboarding with PeeringDB identity and owned self-hosted ZeroTier controller lifecycle operations.
+ZT-IX control plane for virtual Internet Exchange onboarding with PeeringDB identity, SPA frontend delivery, and owned self-hosted ZeroTier controller lifecycle operations.
 
 ## Phase 1 Bootstrap
 
@@ -20,6 +20,7 @@ This repository uses the following for day-to-day development:
 ### Configuration split
 - `.env.example` contains secrets and runtime wiring values.
 - `runtime-config.example.yaml` contains non-secret runtime defaults and policy-style settings.
+- `runtime-config.yaml` includes `workflow.approval_mode` (`manual_admin` default, `policy_auto` optional).
 - Release profile expectation: `ZT_PROVIDER=self_hosted_controller`.
 - `ZT_PROVIDER=central` remains compatibility-only for migration/testing and is not a release gate.
 
@@ -83,6 +84,11 @@ Operational notes:
 uv run uvicorn app.main:app --reload
 ```
 
+### Frontend runtime model (design baseline)
+- Production: SPA assets are served by an NGINX `web` container that reverse-proxies `/api/*` to FastAPI `api` container.
+- Development: run SPA with Vite and proxy API routes to `http://localhost:8000`.
+- Frontend routes are client-side only; backend user-facing workflow data is JSON API based.
+
 ### Verification commands
 ```bash
 uv run ruff check .
@@ -90,7 +96,7 @@ uv run mypy .
 uv run pytest -q
 ```
 
-## Phase 3 Auth Integration (PeeringDB)
+## SPA Auth Integration (PeeringDB)
 
 ### Automated verification in this environment
 ```bash
@@ -98,11 +104,11 @@ uv run pytest tests/auth -q
 ```
 
 ### Browser integration checks (manual, outside this environment)
-Use these steps on a machine where a browser is available.
+Use these steps on a machine where both backend and SPA frontend can run locally.
 
 1. Register or reuse a PeeringDB OAuth application:
-   - Redirect URI must exactly match `PEERINGDB_REDIRECT_URI`.
-   - Example: `http://localhost:8000/auth/callback`.
+   - Redirect URI must exactly match the SPA callback route used in development.
+   - Example: `http://localhost:5173/auth/callback`.
    - Set OAuth signing algorithm to `RSA with SHA-2 256` (RS256) in PeeringDB app registration.
 2. Set runtime variables in `.env`:
    - `PEERINGDB_CLIENT_ID`
@@ -119,26 +125,27 @@ Use these steps on a machine where a browser is available.
    ```bash
    uv run uvicorn app.main:app --reload
    ```
-5. Open browser and test success path:
-   - Visit `http://localhost:8000/auth/login`.
+5. Run SPA frontend (once Phase 9 implementation lands):
+   ```bash
+   cd frontend
+   npm ci
+   npm run dev
+   ```
+6. Open browser and test success path:
+   - Visit `http://localhost:5173/login`.
+   - Start PeeringDB login from SPA.
    - Complete PeeringDB login/consent.
-   - Confirm redirect lands on `http://localhost:8000/onboarding`.
-   - Confirm `GET http://localhost:8000/onboarding` returns authenticated payload.
-6. Test callback failure paths:
-   - Invalid state:
-     - Run `http://localhost:8000/auth/callback?code=fake&state=bad`.
-     - Expect redirect to `/error?code=invalid_state`.
-   - Missing code:
-     - Run `http://localhost:8000/auth/callback?state=anything`.
-     - Expect redirect to `/error?code=missing_code_or_state`.
-7. Test replay protection:
+   - Confirm SPA callback processing routes to `/onboarding`.
+7. Test callback failure paths:
+   - Simulate invalid/missing callback fields and confirm SPA renders inline auth error messages.
+   - Confirm backend returns JSON auth error codes (no server error-page redirects).
+8. Test replay protection:
    - Complete one normal login flow.
-   - Reuse the exact callback URL from browser history.
-   - Expect redirect to `/error?code=invalid_state`.
-8. Test logout:
-   - Visit `http://localhost:8000/auth/logout`.
-   - Then request `http://localhost:8000/onboarding`.
-   - Expect `401 authentication required`.
+   - Replay callback payload via SPA callback screen action.
+   - Expect deterministic invalid-state handling from backend and inline SPA error.
+9. Test logout:
+   - Trigger SPA logout action (`POST /api/v1/auth/logout`).
+   - Re-open protected SPA route (for example `/onboarding`) and confirm session guard redirects to login UI.
 
 ## Route Server Setup (Sub-phase 5B)
 

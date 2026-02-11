@@ -1,6 +1,6 @@
 # Backend Structure
-Version: 0.5
-Date: 2026-02-10
+Version: 0.6
+Date: 2026-02-11
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
 
@@ -158,22 +158,24 @@ CREATE INDEX idx_user_network_access_user_id ON user_network_access(user_id);
 ```
 
 ## 4. Authentication and Session Contract
-1. Auth Option B (`/auth/login`, `/auth/callback`) starts OAuth authorization with `state`, `nonce`, and PKCE verifier.
-2. OAuth callback validates `state`, exchanges code for token set, and consumes one-time state row.
-3. Auth Option A (`/auth/local/login`) verifies username/password against `local_credential.password_hash`.
-4. Identity and ASN/network authorization context are loaded from:
+1. Auth Option B start endpoint (`POST /api/v1/auth/peeringdb/start`) creates OAuth authorization context (`state`, `nonce`, PKCE) and returns authorization URL payload.
+2. Auth Option B callback endpoint (`POST /api/v1/auth/peeringdb/callback`) validates `state`, exchanges code for token set, and consumes one-time state row.
+3. Auth Option A endpoint (`POST /api/v1/auth/local/login`) verifies username/password against `local_credential.password_hash`.
+4. Logout endpoint (`POST /api/v1/auth/logout`) clears session and emits auth audit event.
+5. Identity and ASN/network authorization context are loaded from:
    - PeeringDB profile/API for OAuth users.
    - persisted local assignments for local-credential users.
-5. Local session cookie requirements:
+6. Local session cookie requirements:
    - HTTP-only
    - Secure in production
    - SameSite=Lax
-6. Replay protection:
+7. Replay protection:
    - Callback with used or expired `state` is rejected and audited.
-7. Local credential verification requirements:
+8. Local credential verification requirements:
    - passwords stored as salted hashes only
    - constant-time comparison for verification path
    - disabled credentials cannot establish sessions
+9. Auth APIs return JSON success/error payloads for SPA handling; backend redirect/error-page responses are out of scope.
 
 ## 5. ZeroTier Provisioning Provider Contract
 1. Workflow code depends on provider interface, not provider-specific endpoints.
@@ -236,41 +238,73 @@ All API responses are JSON.
 ```
 
 ### 6.3 Endpoints
-1. `GET /api/v1/me`
+1. `POST /api/v1/auth/peeringdb/start`
+   - Auth: public.
+   - `200`: OAuth start payload including authorization URL and callback correlation context.
+   - `503`: auth provider unavailable.
+2. `POST /api/v1/auth/peeringdb/callback`
+   - Auth: public.
+   - Body: `code`, `state` (and optional provider error fields if surfaced by frontend callback route).
+   - `200`: session established + auth summary payload.
+   - `400`: callback validation failure (`invalid_state`, `expired_state`, `invalid_nonce`, `upstream_auth_failure`).
+3. `POST /api/v1/auth/local/login`
+   - Auth: public.
+   - Body: `username`, `password`.
+   - `200`: session established + auth summary payload.
+   - `401`: invalid credentials.
+   - `403`: disabled credential or local auth disabled.
+4. `POST /api/v1/auth/logout`
+   - Auth: session required.
+   - `200`: session cleared.
+5. `GET /api/v1/onboarding/context`
+   - Auth: user session required.
+   - `200`: eligible ASN list + allowed target network list + current submission constraints.
+   - `401`: unauthenticated.
+6. `GET /api/v1/me`
    - Auth: user session required.
    - `200`: user profile + linked ASNs.
    - `401`: unauthenticated.
-2. `GET /api/v1/asns`
+7. `GET /api/v1/asns`
    - Auth: user session required.
    - `200`: eligible ASN list.
    - `401`: unauthenticated.
-3. `POST /api/v1/requests`
+8. `POST /api/v1/requests`
    - Auth: user session required.
    - Body: `asn`, `zt_network_id`, optional `node_id`, optional `notes`.
    - `201`: request created in `pending`.
    - `400`: validation error.
    - `403`: ASN not authorized for user.
    - `409`: duplicate active request.
-4. `GET /api/v1/requests`
+9. `GET /api/v1/requests`
    - Auth: user session required.
    - `200`: user-owned request list.
-5. `GET /api/v1/requests/{request_id}`
+10. `GET /api/v1/requests/{request_id}`
    - Auth: user session required.
    - `200`: request detail + membership if present.
    - `404`: not found or not visible to caller.
-6. `POST /api/v1/admin/requests/{request_id}/approve`
+11. `GET /api/v1/admin/requests`
+   - Auth: admin required.
+   - Query: optional `status`, `asn`, `zt_network_id`, `min_age_minutes`.
+   - `200`: admin-visible request list.
+   - `403`: not admin.
+12. `GET /api/v1/admin/requests/{request_id}`
+   - Auth: admin required.
+   - `200`: admin request detail + audit context.
+   - `403`: not admin.
+   - `404`: not found.
+13. `POST /api/v1/admin/requests/{request_id}/approve`
    - Auth: admin required.
    - `200`: status set `approved`, job queued.
    - `403`: not admin.
    - `409`: invalid current state.
-7. `POST /api/v1/admin/requests/{request_id}/reject`
+14. `POST /api/v1/admin/requests/{request_id}/reject`
    - Auth: admin required.
    - Body: `reject_reason` required.
    - `200`: status set `rejected`.
    - `400`: missing reason.
    - `403`: not admin.
    - `409`: invalid current state.
-8. `POST /api/v1/admin/requests/{request_id}/retry`
+15. `POST /api/v1/admin/requests/{request_id}/retry`
    - Auth: admin required.
    - `200`: status set `approved`, job requeued.
    - `403`: not admin.
@@ -330,6 +364,13 @@ Current implementation:
 24. `ROUTE_SERVER_SSH_KNOWN_HOSTS_FILE`
 25. `ROUTE_SERVER_REMOTE_CONFIG_DIR`
 26. `ROUTE_SERVER_LOCAL_ASN`
+27. `ZTIX_RUNTIME_CONFIG_PATH` (optional; defaults to `runtime-config.yaml`)
+
+## 9.1 Required Runtime Configuration Keys (`runtime-config.yaml`)
+1. `workflow.approval_mode`:
+   - `manual_admin` (default)
+   - `policy_auto` (optional)
+2. Guardrail policy expansion for `policy_auto` is out of scope for `v0.1.0`; eligibility enforcement remains delegated to existing PeeringDB/local ASN + network authorization checks in request workflow validation.
 
 ## 10. Edge Cases
 1. Callback replay with used `state`: reject and audit.
@@ -343,3 +384,4 @@ Current implementation:
 9. Provisioning timeout or rate limit: preserve error context and enforce bounded retry behavior.
 10. Invalid provider mode or missing credentials: fail fast at startup with clear remediation logs.
 11. Self-hosted controller lifecycle preflight failure: block provisioning and return actionable lifecycle remediation context.
+12. Auth-related failures return JSON codes for SPA rendering and must not depend on backend redirect/error pages.

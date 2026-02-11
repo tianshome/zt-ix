@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 1.7
+Version: 1.8
 Date: 2026-02-11
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -16,13 +16,13 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] Phase 4 backend request workflow is complete for API + JSON route responses.
 - [x] Phase 5 provider foundation and membership provisioning is complete (Step 5.1 to Step 5.8).
 - [x] Phase 6 route-server desired config generation is complete (Step 6.1 to Step 6.3).
-- [ ] Configurable auto-approval mode is planned but not implemented.
-  - Blocked by: Phase 4 Step 4.7.
-  - Reason: approval-mode policy evaluator behavior and guardrails are not implemented yet.
+- [ ] Configurable approval mode is planned but not implemented.
+  - Blocked by: Phase 9 Step 9.4 to Step 9.5.
+  - Reason: runtime-config approval-mode wiring and `policy_auto` transition behavior are not implemented yet.
 - [x] Queue placeholder has been replaced with real async dispatch.
-- [ ] UI frontend integration for onboarding/dashboard/request/admin flows.
-  - Blocked by: Phase 9 Step 9.1 to Step 9.4.
-  - Reason: current accepted scope uses JSON responses; React/TypeScript/shadcn-ui frontend implementation is deferred by plan.
+- [ ] SPA frontend integration for onboarding/dashboard/request/admin flows.
+  - Blocked by: Phase 10 Step 10.1 to Step 10.5 and Phase 11 Step 11.1 to Step 11.6.
+  - Reason: SPA runtime foundation and core workflow screens are not implemented yet.
 - [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
 - [x] Self-hosted controller lifecycle ownership is implemented for planned scope (Phase 8 Step 8.1 to Step 8.5).
 
@@ -36,7 +36,9 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] Requirement: each approved ASN must produce explicit generated BIRD peer config on every configured route server.
 - [x] Requirement: generated BIRD policy path must enable ROA/RPKI validation for route acceptance decisions.
 - [x] Requirement: policy auto-approval is a configurable option, with manual admin approval remaining the default mode.
-- [ ] Open question: exact auto-approval policy guardrails (eligibility checks, fallback behavior, and rate-limit posture) still need product/security sign-off.
+- [x] Requirement: approval mode must be defined in `runtime-config.yaml` (`workflow.approval_mode`).
+- [x] Scope decision: detailed `policy_auto` guardrail expansion is out of scope for `v0.1.0`; request eligibility relies on existing PeeringDB/local ASN/network authorization checks.
+- [x] Assumption: frontend runtime is strict SPA with client-side route ownership and API-only backend interactions.
 - [ ] Open question: target retry limits/backoff constants for self-hosted lifecycle operations should be finalized before Phase 8 production rollout.
 - [x] Assumption: Phase 8 lifecycle ownership targets a single self-hosted controller for `v0.1.0`; HA pair/topology orchestration is post-`v0.1.0` hardening and not a Phase 8 blocker.
 - [x] Open question resolved: for Auth Option A, empty associated-network assignment means unrestricted access when no rows exist.
@@ -58,11 +60,12 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] PRD `F2` maps to phases 3 and 4.
 - [x] PRD `F3` and `F5` map to phase 4.
 - [x] PRD `F4` maps to phases 5, 6, and 7.
-- [x] PRD `F9` maps to phase 8 and phase 11 release gates.
-- [x] PRD `F6` and `F7` map to phases 3, 4, 5, 6, 7, 8, and 10.
-- [x] Frontend UX/accessibility requirements map to phase 9.
-- [x] Release and operational requirements map to phase 11.
-- [x] Route-server orchestration extension (Route Server Option A) maps to phases 6, 7, and 11 validation.
+- [x] PRD `F9` maps to phase 8 and phase 14 release gates.
+- [x] PRD `F6` and `F7` map to phases 3, 4, 5, 6, 7, 8, and 13.
+- [x] SPA delivery and frontend UX requirements map to phases 9, 10, 11, and 12.
+- [x] Accessibility/i18n hardening beyond MVP is deferred post-`v0.1.0`.
+- [x] Release and operational requirements map to phase 14.
+- [x] Route-server orchestration extension (Route Server Option A) maps to phases 6, 7, and 14 validation.
 
 ## 3. Phase 1: Project Bootstrap
 Implements: foundational requirements for all PRD features.
@@ -149,13 +152,13 @@ Steps:
 - [ ] Step 4.7: Add configurable approval mode support:
   - `manual_admin` (default): keep current admin decision path.
   - `policy_auto`: auto-transition policy-eligible `pending` requests to `approved` with explicit audit metadata.
-  - Blocked by: Section 1 open question on auto-approval guardrails and policy rules.
-  - Reason: product/security sign-off and policy evaluator implementation are pending.
+  - Blocked by: Phase 9 Step 9.4 to Step 9.5.
+  - Reason: runtime-config approval-mode wiring and SPA/API realignment work are scheduled in phase 9.
 - [x] Queueing placeholder retained for defer-to-phase-5 behavior (`_enqueue_provisioning_attempt`).
 - [x] Replace queueing placeholder with real Celery task dispatch.
 - [ ] Integrate React/TypeScript/shadcn-ui frontend workflow pages for operator/admin routes.
-  - Blocked by: Phase 9 Step 9.1 to Step 9.4.
-  - Reason: JSON responses are accepted for the current state; frontend integration is intentionally deferred.
+  - Blocked by: Phase 10 Step 10.1 to Step 10.5 and Phase 11 Step 11.1 to Step 11.6.
+  - Reason: SPA runtime foundation and workflow UI implementation are intentionally deferred to dedicated frontend phases.
 
 Exit criteria:
 - [x] Operator can submit request and track state via API and JSON route responses.
@@ -165,8 +168,8 @@ Exit criteria:
   - Reason: policy evaluation path is not implemented yet.
 - [x] Admin approval/retry triggers async provisioning dispatch.
 - [ ] Operator/admin rendered UI pages match frontend guidelines.
-  - Blocked by: Phase 9 Step 9.1 to Step 9.4.
-  - Reason: React frontend layer is not implemented yet.
+  - Blocked by: Phase 10 Step 10.1 to Step 10.5 and Phase 11 Step 11.1 to Step 11.6.
+  - Reason: SPA frontend layer is not implemented yet.
 
 Verification:
 - [x] `pytest tests/workflow -q`
@@ -175,8 +178,8 @@ Verification:
   - Blocked by: Step 4.7.
   - Reason: configurable approval-mode logic is not implemented yet.
 - [ ] Manual UI checks for rendered pages.
-  - Blocked by: Phase 9 UI implementation is not complete.
-  - Reason: current routes are JSON responses by design.
+  - Blocked by: Phase 11 Step 11.1 to Step 11.6.
+  - Reason: SPA workflow screens are not implemented yet.
 
 ## 7. Phase 5: Provider Foundation and Membership Provisioning
 Implements: PRD `F4`, `F5`, `F6`, `F7`.
@@ -291,8 +294,8 @@ Exit criteria:
 - [x] Required controller networks reconcile before member authorization attempts run.
 - [x] Token reload control and backup/restore validation drill are auditable and test-backed.
 - [ ] Release profile behavior is validated without `ZT_CENTRAL_API_TOKEN` dependency.
-  - Blocked by: Phase 11 Step 11.5.
-  - Reason: release-gate validation is executed in staging during phase 11.
+  - Blocked by: Phase 14 Step 14.5.
+  - Reason: release-gate validation is executed in staging during phase 14.
 
 Verification:
 - [x] `POSTGRES_HOST_PORT=55433 docker compose up -d postgres redis zerotier-controller`
@@ -310,58 +313,152 @@ Verification:
   - required-network reconciliation completes before provisioning resumes
   - backup -> restore drill revalidates readiness and reconciliation before reopening provisioning
 
-## 11. Phase 9: Frontend Hardening
-Implements: PRD UX clarity and accessibility requirements.
+## 11. Phase 9: API Realignment for SPA and Approval-Mode Config
+Implements: PRD `F1`, `F2`, `F3`, `F5`, SPA/API contract decisions.
+Goal: provide complete JSON API surface for SPA and remove redirect/page assumptions from backend workflows before frontend implementation starts.
 
 Steps:
-- [ ] Step 9.1: Bootstrap React + TypeScript frontend shell and shared layout for core routes.
-- [ ] Step 9.2: Implement shadcn-ui based components styled per `FRONTEND_GUIDELINES.md`.
-- [ ] Step 9.3: Add accessibility checks (keyboard, focus, contrast, non-color status cues).
-- [ ] Step 9.4: Add empty/error states for all critical screens.
+- [ ] Step 9.1: Add SPA auth APIs:
+  - `POST /api/v1/auth/peeringdb/start`
+  - `POST /api/v1/auth/peeringdb/callback`
+  - `POST /api/v1/auth/local/login`
+  - `POST /api/v1/auth/logout`
+- [ ] Step 9.2: Add SPA workflow data APIs:
+  - `GET /api/v1/onboarding/context`
+  - `GET /api/v1/admin/requests`
+  - `GET /api/v1/admin/requests/{request_id}`
+- [ ] Step 9.3: Remove backend `/error` page contract and backend workflow page-route dependence for SPA flows.
+- [ ] Step 9.4: Parse `workflow.approval_mode` from `runtime-config.yaml` (`manual_admin` default, `policy_auto` optional).
+- [ ] Step 9.5: Implement approval-mode behavior with current validation scope:
+  - keep existing ASN/network eligibility checks as authoritative,
+  - do not add additional policy guardrails in `v0.1.0`,
+  - emit explicit audit metadata for auto-approved decisions.
+- [ ] Step 9.6: Add/adjust automated tests for JSON auth callbacks, onboarding context, admin list/detail APIs, and approval-mode behavior.
 
 Blocked items:
-- [ ] Integrate real UI for `/onboarding`, `/dashboard`, `/requests/:id`, `/admin/requests`, `/admin/requests/:id`.
-  - Blocked by: Phase 9 execution start.
-  - Reason: current state intentionally accepts JSON responses; React frontend layer has not started.
+- [ ] Remove legacy redirect-style auth routes and compatibility behavior.
+  - Blocked by: Phase 11 Step 11.1 to Step 11.3.
+  - Reason: SPA login/callback/request screens must consume replacement APIs before final route removal.
 
 Exit criteria:
-- [ ] Core routes are usable on mobile and desktop.
-- [ ] Accessibility baseline checks pass.
+- [ ] SPA-required auth/workflow/admin APIs exist and are test-covered.
+- [ ] Approval mode is runtime-configurable from `runtime-config.yaml`.
+- [ ] Backend no longer relies on server error page redirects for user-facing auth errors.
 
 Verification:
-- [ ] Manual keyboard-only walkthrough of auth, onboarding, and admin review flows.
-- [ ] Automated accessibility check (if tooling is configured).
+- [ ] `pytest tests/auth -q`
+- [ ] `pytest tests/auth_local -q`
+- [ ] `pytest tests/workflow -q`
+- [ ] Approval-mode tests cover `manual_admin` and `policy_auto` outcomes.
 
-## 12. Phase 10: Security and Observability
+## 12. Phase 10: SPA Platform and Delivery Topology
+Implements: PRD SPA runtime scope and frontend stack requirements.
+Goal: establish SPA build/runtime foundation after backend API realignment is complete.
+
+Steps:
+- [ ] Step 10.1: Bootstrap frontend workspace (`frontend/`) using pinned React/TypeScript/Vite/npm versions from `TECH_STACK.md`.
+- [ ] Step 10.2: Implement client-side router and shared app shell for `/`, `/login`, `/auth/callback`, `/onboarding`, `/dashboard`, `/requests/:id`, `/admin/requests`, `/admin/requests/:id`.
+- [ ] Step 10.3: Add production NGINX web container assets/config for SPA static serving and `/api/*` reverse proxy to FastAPI service container.
+- [ ] Step 10.4: Update `docker-compose.yml` for production-like profile with separate `web` and `api` services.
+- [ ] Step 10.5: Add Vite dev proxy config and local SPA run instructions (`vite serve` -> `localhost:8000` API proxy).
+
+Exit criteria:
+- [ ] SPA router owns browser routes.
+- [ ] Production compose profile documents NGINX web container + API container topology.
+- [ ] Local development can run SPA via Vite proxy without backend template routes.
+
+Verification:
+- [ ] `npm ci` (inside `frontend/`)
+- [ ] `npm run build` (inside `frontend/`)
+- [ ] `docker compose config` shows `web` -> `api` topology wiring.
+
+## 13. Phase 11: Core SPA Workflow Screens (MVP)
+Implements: PRD operator/admin UI scope for `v0.1.0`.
+Goal: deliver functional SPA workflows using API polling and MVP table behavior.
+
+Steps:
+- [ ] Step 11.1: Implement `/login` and `/auth/callback` screens with inline auth errors (no backend error-page redirects).
+- [ ] Step 11.2: Implement `/onboarding` request form with duplicate-conflict and eligibility error handling.
+- [ ] Step 11.3: Implement operator pages (`/dashboard`, `/requests/:id`) using GET polling for request status refresh.
+- [ ] Step 11.4: Implement admin pages (`/admin/requests`, `/admin/requests/:id`) with approve/reject/retry actions.
+- [ ] Step 11.5: Use shadcn/Radix data-table primitives for admin/operator tables with MVP behavior only.
+- [ ] Step 11.6: Add minimum viable empty/error states for critical screens.
+
+Blocked items:
+- [ ] Large-scale table optimization (virtualization, advanced sort persistence, server-driven pagination tuning).
+  - Blocked by: Post-`v0.1.0` frontend hardening phase.
+  - Reason: explicitly out of MVP scope.
+- [ ] Enhanced audit-event timeline UX and formatting.
+  - Blocked by: Post-`v0.1.0` frontend hardening phase.
+  - Reason: explicitly deferred by current product scope.
+- [ ] Mobile-specific admin layout optimization beyond baseline responsive table behavior.
+  - Blocked by: Post-`v0.1.0` frontend hardening phase.
+  - Reason: current scope accepts shadcn/Radix default mobile behavior.
+
+Exit criteria:
+- [ ] Login/onboarding/operator/admin SPA routes are usable end-to-end with backend APIs.
+- [ ] Status updates are visible via HTTP polling without manual page reloads.
+- [ ] Core request/admin actions are available from SPA screens.
+
+Verification:
+- [ ] Manual SPA walkthrough for auth -> onboarding -> request detail -> admin decision/retry.
+- [ ] Manual polling check confirms status transition visibility without full page refresh.
+
+## 14. Phase 12: Frontend MVP Validation and Deferred UX Scope
+Implements: final frontend quality gate for `v0.1.0`.
+Goal: validate shipped SPA behavior while explicitly tracking deferred frontend quality work.
+
+Steps:
+- [ ] Step 12.1: Add frontend/API integration smoke tests for login, request creation, admin decision, and retry flows.
+- [ ] Step 12.2: Validate MVP responsive behavior on target breakpoints (`sm`, `md`, `lg`) for onboarding/dashboard/admin queue screens.
+- [ ] Step 12.3: Document deferred frontend scope items (full accessibility hardening, i18n, advanced mobile/table optimization) in release checklist.
+
+Blocked items:
+- [ ] Automated accessibility tooling gate for CI.
+  - Blocked by: Post-`v0.1.0` frontend hardening phase.
+  - Reason: accessibility automation is explicitly deferred beyond `v0.1.0`.
+- [ ] Internationalized error/status message catalogs.
+  - Blocked by: Post-`v0.1.0` frontend hardening phase.
+  - Reason: i18n is explicitly deferred beyond `v0.1.0`.
+
+Exit criteria:
+- [ ] MVP SPA flows pass integration smoke checks.
+- [ ] Deferred frontend items are explicitly tracked and not silently dropped.
+
+Verification:
+- [ ] Frontend integration smoke command(s) documented and passing.
+- [ ] Manual responsive checks recorded for defined breakpoints.
+
+## 15. Phase 13: Security and Observability
 Implements: PRD `F6`, `F7`.
 
 Steps:
-- [ ] Step 10.1: Add CSRF protections for all state-changing form actions.
-- [ ] Step 10.2: Add structured logging with request IDs and external correlation IDs.
-- [ ] Step 10.3: Add metrics for auth success/failure and provisioning latency.
-- [ ] Step 10.4: Add security checklist and secret management validation gates.
+- [ ] Step 13.1: Add CSRF protections for SPA state-changing API calls (cookie + header/token validation pattern).
+- [ ] Step 13.2: Add structured logging with request IDs and external correlation IDs.
+- [ ] Step 13.3: Add metrics for auth success/failure and provisioning latency.
+- [ ] Step 13.4: Add security checklist and secret management validation gates.
 
 Exit criteria:
-- [ ] State-changing endpoints require CSRF validation.
+- [ ] State-changing endpoints require CSRF validation under SPA/API request model.
 - [ ] Logs/metrics support traceability across API and worker boundaries.
 
 Verification:
 - [ ] `pytest tests/security -q`
-- [ ] Manual negative test: CSRF-missing request rejected.
+- [ ] Manual negative test: CSRF-missing request rejected for SPA API write actions.
 
-## 13. Phase 11: Release Readiness
+## 16. Phase 14: Release Readiness
 Implements: PRD definition-of-done completion.
 
 Steps:
-- [ ] Step 11.1: Create deployment manifests and environment docs.
-- [ ] Step 11.2: Execute end-to-end staging test using sandbox credentials.
-- [ ] Step 11.3: Produce incident response and manual retry runbook (including route-server SSH/BIRD rollback procedures).
-- [ ] Step 11.4: Tag `v0.1.0` when PRD acceptance criteria are fully met.
-- [ ] Step 11.5: Execute self-hosted-controller-only staging run (no Central credentials) including lifecycle preflight checks.
+- [ ] Step 14.1: Create deployment manifests and environment docs.
+- [ ] Step 14.2: Execute end-to-end staging test using sandbox credentials.
+- [ ] Step 14.3: Produce incident response and manual retry runbook (including route-server SSH/BIRD rollback procedures).
+- [ ] Step 14.4: Tag `v0.1.0` when PRD acceptance criteria are fully met.
+- [ ] Step 14.5: Execute self-hosted-controller-only staging run (no Central credentials) including lifecycle preflight checks.
   - Blocked by: Phase 8 Step 8.1 to Step 8.5.
   - Reason: owned controller lifecycle controls must exist before self-hosted-only staging sign-off.
-- [ ] Step 11.6: Execute controller disaster-recovery drill (backup -> restore -> readiness verification -> provisioning resume).
-  - Blocked by: Step 11.5.
+- [ ] Step 14.6: Execute controller disaster-recovery drill (backup -> restore -> readiness verification -> provisioning resume).
+  - Blocked by: Step 14.5.
   - Reason: DR drill sign-off depends on self-hosted-only staging baseline.
 
 Exit criteria:
@@ -375,24 +472,24 @@ Verification:
 - [ ] Final regression test pass before release tag.
 - [ ] Self-hosted lifecycle checklist signed off (bootstrap, reconciliation, rotation, backup/restore).
 
-## 14. TODO: Phase 12 (Route Server Option B) - Persisted Route Server State Model
-Status: deferred until after Phase 11 completion.
+## 17. TODO: Phase 15 (Route Server Option B) - Persisted Route Server State Model
+Status: deferred until after Phase 14 completion.
 
 Steps:
-- [ ] Step 12.1: Add persistent route-server inventory and per-request per-server sync tables/migrations.
-  - Blocked by: Phase 11 completion.
+- [ ] Step 15.1: Add persistent route-server inventory and per-request per-server sync tables/migrations.
+  - Blocked by: Phase 14 completion.
   - Reason: Route Server Option B is explicitly out of active scope before release readiness.
-- [ ] Step 12.2: Split route-server fanout into one queue job per route server with isolated retries and backoff.
-  - Blocked by: Step 12.1.
+- [ ] Step 15.2: Split route-server fanout into one queue job per route server with isolated retries and backoff.
+  - Blocked by: Step 15.1.
   - Reason: per-server jobs require persisted route-server state model.
-- [ ] Step 12.3: Add reconciliation worker that compares desired state to BIRD effective state and repairs drift.
-  - Blocked by: Step 12.1 and Step 12.2.
+- [ ] Step 15.3: Add reconciliation worker that compares desired state to BIRD effective state and repairs drift.
+  - Blocked by: Step 15.1 and Step 15.2.
   - Reason: reconciliation requires persisted desired/effective per-server state and isolated jobs.
-- [ ] Step 12.4: Expose per-route-server sync state and last error in admin request detail views.
-  - Blocked by: Step 12.1.
+- [ ] Step 15.4: Expose per-route-server sync state and last error in admin request detail views.
+  - Blocked by: Step 15.1.
   - Reason: UI/API exposure depends on persisted state model.
-- [ ] Step 12.5: Add tests for partial-failure convergence and per-server retry safety.
-  - Blocked by: Step 12.1 to Step 12.4.
+- [ ] Step 15.5: Add tests for partial-failure convergence and per-server retry safety.
+  - Blocked by: Step 15.1 to Step 15.4.
   - Reason: test targets do not exist until the model/jobs/reconciliation are implemented.
 
 Exit criteria:
@@ -402,3 +499,20 @@ Exit criteria:
 Verification:
 - [ ] `pytest tests/route_server_state -q`
 - [ ] Manual check: one-route-server-down scenario converges after targeted retry.
+
+## 18. TODO: Post-`v0.1.0` Frontend Hardening
+Status: deferred until after Phase 14 completion.
+
+Steps:
+- [ ] Step 18.1: Add automated accessibility tooling and CI gates (keyboard flow, contrast checks, semantic status cues).
+  - Blocked by: Phase 14 completion.
+  - Reason: MVP release scope explicitly defers accessibility automation.
+- [ ] Step 18.2: Add i18n framework and translated error/status message catalogs.
+  - Blocked by: Phase 14 completion.
+  - Reason: MVP release scope explicitly defers localization.
+- [ ] Step 18.3: Improve data-heavy table UX at scale (virtualization/pagination persistence/mobile-specific layouts).
+  - Blocked by: Phase 14 completion.
+  - Reason: MVP release scope accepts baseline shadcn/Radix table behavior.
+- [ ] Step 18.4: Add enhanced audit-event timeline presentation patterns for operator/admin detail views.
+  - Blocked by: Phase 14 completion.
+  - Reason: MVP release scope focuses on functional workflow completion.

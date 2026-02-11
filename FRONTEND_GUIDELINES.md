@@ -1,11 +1,17 @@
 # Frontend Guidelines
-Version: 0.1
-Date: 2026-02-10
+Version: 0.2
+Date: 2026-02-11
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `IMPLEMENTATION_PLAN.md`
 
 ## 1. Visual Direction
 Operational-console aesthetic: clean, high-contrast, and data-first. The UI should feel precise and network-centric rather than marketing-oriented.
+
+## 1.1 Runtime Model
+1. Frontend is a strict SPA.
+2. Browser routes are client-side only.
+3. Backend integration uses fetch/XHR APIs only.
+4. Backend redirect-driven page rendering is out of scope.
 
 ## 2. Typography
 1. Primary UI font: `Sora`
@@ -64,6 +70,7 @@ Operational-console aesthetic: clean, high-contrast, and data-first. The UI shou
 3. Tables:
    - Sticky header
    - Row hover tint using `--bg-panel-alt`
+   - Use shadcn/Radix data-table primitives for MVP admin/operator tables in `v0.1.0`
 4. Forms:
    - Label always visible above control
    - Inline error under field in `--status-error`
@@ -79,8 +86,11 @@ Operational-console aesthetic: clean, high-contrast, and data-first. The UI shou
 3. `lg`: 1024px
 4. `xl`: 1280px
 
-## 9. Accessibility
-1. Minimum text contrast ratio 4.5:1.
-2. Focus rings mandatory for keyboard navigation.
-3. All status indicators must include icon/text, not color alone.
-4. Error summaries appear at top of forms for screen-reader discoverability.
+## 9. Data Refresh
+1. Request and queue status refresh uses HTTP GET polling only in `v0.1.0`.
+2. Polling cadence should be bounded and configurable in frontend constants.
+3. WebSocket/SSE streaming is deferred.
+
+## 10. Accessibility Scope
+1. `v0.1.0` scope: readable status text and visible keyboard focus on critical controls.
+2. Full a11y hardening (contrast audits, automated tooling gates, deep screen-reader QA) is deferred post-`v0.1.0`.

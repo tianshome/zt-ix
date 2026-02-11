@@ -1,5 +1,5 @@
 # Technical Stack
-Version: 0.6
+Version: 0.7
 Date: 2026-02-11
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
@@ -29,9 +29,13 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 2. Redis 7.4.1
 
 ## 6. Frontend Delivery
-1. ReactJS
-2. TypeScript
-3. shadcn-ui
+1. React `19.2.4`
+2. React DOM `19.2.4`
+3. TypeScript `5.9.3`
+4. Vite `7.3.1`
+5. shadcn-ui CLI `3.8.4`
+6. npm `11.10.0`
+7. Production frontend runtime: NGINX web container serving SPA static assets and proxying API requests to FastAPI container.
 
 ## 7. Security and Config
 1. python-dotenv 1.0.1
@@ -50,6 +54,7 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 4. OpenSSH client (`ssh`) for route-server fanout workflows
 5. BIRD 3.x for route-server config syntax validation and runtime
 6. ZeroTier One service/controller runtime (owned self-hosted controller lifecycle path via local controller API)
+7. NGINX container runtime for SPA delivery in production compose profile
 
 ## 9.1 Local Development Dependency Profile
 1. Selected profile: infrastructure-only containers.
@@ -59,6 +64,7 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
    - ZeroTier controller runtime for lifecycle validation: `zerotier/zerotier:1.14.2`
 3. Application processes run directly with `uv run` (API server, worker, and tests), not inside Docker by default.
 4. Full-container application runtime is reserved for parity checks and release validation, not the default inner-loop workflow.
+5. Frontend development runs with Vite dev server and proxy-to-backend API routes (`localhost:8000`).
 
 ## 10. External Integrations (Authoritative Endpoints and Auth)
 1. PeeringDB OAuth2 endpoints:
@@ -96,7 +102,7 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 ## 12. Version Pinning Policy
 1. All Python dependencies must be pinned in `pyproject.toml` and lockfile (`uv.lock`) to exact versions above.
 2. Container image tags must use fixed versions, not `latest`.
-3. Frontend dependencies must be pinned in the frontend lockfile once Phase 9 frontend implementation begins.
+3. Frontend dependencies must be pinned in `package-lock.json` with exact versions above once frontend implementation begins.
 4. Any version change requires updating this file and changelog entry.
 
 ## 13. Source References (Official Docs)

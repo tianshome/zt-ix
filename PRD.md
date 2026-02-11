@@ -1,12 +1,12 @@
 # Product Requirements Document (PRD)
-Version: 0.5
-Date: 2026-02-10
+Version: 0.6
+Date: 2026-02-11
 Product: ZT Internet Exchange (ZT-IX) Controller
 
 Related docs: `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 
 ## 1. Objective
-Build a self-service controller that lets verified network operators join a virtual IX fabric on ZeroTier, using PeeringDB OAuth and Auth Option A local credentials while keeping one canonical app user record, deterministic route-server desired config generation, and repository-owned self-hosted ZeroTier controller lifecycle operations (bootstrap, network reconciliation, credential lifecycle, and backup/restore readiness).
+Build a self-service controller that lets verified network operators join a virtual IX fabric on ZeroTier, using PeeringDB OAuth and Auth Option A local credentials while keeping one canonical app user record, deterministic route-server desired config generation, repository-owned self-hosted ZeroTier controller lifecycle operations (bootstrap, network reconciliation, credential lifecycle, and backup/restore readiness), and a strict SPA frontend delivered separately from backend API services.
 
 ## 2. Target Users
 1. Network operators who maintain ASN records in PeeringDB.
@@ -34,8 +34,12 @@ Virtual IX onboarding is often manual and inconsistent. Operators need a standar
    - generate explicit per-ASN BIRD peer snippets using assigned endpoint addresses,
    - sync snippets to each configured route server over SSH,
    - enforce ROA/RPKI validation checks in generated policy path.
-10. Operator and admin UI for request lifecycle visibility.
+10. Operator and admin UI for request lifecycle visibility using client-side routing only.
 11. Audit logging for auth, decisions, provisioning actions, and controller lifecycle actions.
+12. SPA runtime model:
+   - frontend served by NGINX container in production,
+   - NGINX reverse-proxies API traffic to FastAPI service container,
+   - frontend uses fetch/XHR API calls (no backend-rendered pages).
 
 ## 5. Out of Scope (Non-Goals)
 1. Full multi-vendor BGP lifecycle orchestration beyond documented BIRD route-server Option A workflow.
@@ -44,6 +48,7 @@ Virtual IX onboarding is often manual and inconsistent. Operators need a standar
 4. Multi-cloud overlay orchestration outside ZeroTier.
 5. Additional identity providers beyond PeeringDB OAuth and Auth Option A local credentials in phase 1.
 6. Automated deployment/management of custom ZeroTier roots/planet infrastructure beyond the documented controller lifecycle ownership baseline.
+7. Full i18n and advanced accessibility hardening beyond MVP for `v0.1.0`.
 
 ## 6. User Stories
 1. As an operator, I can log in with PeeringDB so I do not create a separate identity.
@@ -72,12 +77,12 @@ Virtual IX onboarding is often manual and inconsistent. Operators need a standar
 
 ### F1. Authentication (PeeringDB + Auth Option A Local Credentials)
 Acceptance criteria:
-1. User can initiate login via PeeringDB OAuth endpoints.
+1. SPA can initiate PeeringDB OAuth via backend API and receive authorization URL/context without backend redirect responses.
 2. Callback validates `state` and `nonce` before session creation.
 3. On OAuth success, local user is upserted by `peeringdb_user_id`.
 4. Local users can authenticate with username/password using stored password hashes.
 5. Local credential records are provisioned via server CLI only; public self-signup is not included in phase 1.
-6. On auth errors, user is sent to recoverable error path with retry action.
+6. On auth errors, backend returns deterministic JSON error payloads and SPA shows recoverable inline login errors without redirecting to server error pages.
 7. Requested OAuth scopes are explicitly documented and tested.
 
 ### F2. ASN Discovery and Eligibility
@@ -109,9 +114,10 @@ Acceptance criteria:
 
 ### F5. Admin Controls
 Acceptance criteria:
-1. Admins can list/filter requests by status, ASN, network, and age.
-2. Admins can approve/reject with explicit audit event.
-3. Admins can retry failed provisioning and view last known error context.
+1. Admins can list/filter requests by status, ASN, network, and age using MVP frontend-only table behavior in `v0.1.0`.
+2. Large-scale table optimization (advanced pagination/sort persistence/virtualization) is deferred post-`v0.1.0`.
+3. Admins can approve/reject with explicit audit event.
+4. Admins can retry failed provisioning and view last known error context.
 
 ### F6. Auditing and Observability
 Acceptance criteria:
@@ -152,7 +158,8 @@ Acceptance criteria:
    - Admin-facing and operator-facing failures include actionable status text.
    - Worker logs expose enough context for post-incident tracing.
 4. Accessibility:
-   - UI must meet the baseline in `FRONTEND_GUIDELINES.md` for contrast, focus, and status semantics.
+   - MVP `v0.1.0` requires readable status text and keyboard-usable critical actions.
+   - Full accessibility hardening and automated a11y checks are deferred post-`v0.1.0`.
 
 ## 10. Success Criteria
 1. 90%+ of valid operator requests complete without manual backend intervention.
@@ -176,9 +183,11 @@ Acceptance criteria:
 3. Assumption: Auth Option A local accounts are created and managed from server CLI, not self-signup.
 4. Assumption: release environments run `ZT_PROVIDER=self_hosted_controller`; `central` is compatibility-only.
 5. Assumption: For local users, empty associated-network assignment means unrestricted network eligibility when no rows exist.
-6. Open question: Should policy-based auto-approval be a phase 1.1 scope item or deferred to a later phase?
-7. Open question: What minimum PeeringDB scope set is required in production if future API calls expand?
-8. Open question: What controller runtime topology (single-node vs HA pair) is required for `v0.1.0`?
+6. Assumption: frontend runtime is strict SPA; route ownership is client-side and backend serves JSON APIs only for UI workflows.
+7. Requirement: approval behavior is runtime-configurable via `runtime-config.yaml` (`workflow.approval_mode` with `manual_admin` default and `policy_auto` optional).
+8. Scope decision: detailed policy-auto guardrails are out of scope for `v0.1.0`; authorization relies on existing PeeringDB/local eligibility checks in backend workflow validation.
+9. Open question: What minimum PeeringDB scope set is required in production if future API calls expand?
+10. Open question: What controller runtime topology (single-node vs HA pair) is required for `v0.1.0`?
 
 ## 13. Definition of Done
 1. All in-scope features meet acceptance criteria in this PRD.
@@ -189,3 +198,4 @@ Acceptance criteria:
 6. Local credential auth path and CLI provisioning path have automated test coverage.
 7. Route-server desired config rendering and SSH fanout path have automated tests.
 8. Owned self-hosted controller lifecycle paths (bootstrap/readiness, network reconciliation, token lifecycle, backup/restore validation) are implemented, audited, and test-backed.
+9. SPA build/runtime delivery is implemented with NGINX frontend container and API reverse proxy wiring in production compose profile.

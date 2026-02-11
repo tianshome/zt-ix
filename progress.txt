@@ -1138,3 +1138,89 @@ Next
 
 Known bugs / regressions
 1. None identified for this documentation-only update.
+
+---
+
+Update: 2026-02-11 (SPA/API architecture decisions + frontend phase split)
+
+Decision
+1. Frontend runtime model is now strict SPA:
+   - client-side route ownership only,
+   - frontend uses fetch/XHR APIs only (no backend workflow-page redirects),
+   - production target is NGINX `web` container reverse-proxying to FastAPI `api`,
+   - development target is Vite dev server with proxy to `localhost:8000`.
+2. Approval mode policy is runtime-configurable via `runtime-config.yaml`:
+   - `workflow.approval_mode=manual_admin|policy_auto` (`manual_admin` default),
+   - detailed `policy_auto` guardrail expansion is out of scope for `v0.1.0`.
+3. Frontend non-MVP items are explicitly deferred post-`v0.1.0`:
+   - automated accessibility hardening,
+   - i18n message catalogs,
+   - advanced mobile/table scaling and audit timeline UX.
+
+Completed
+1. Updated design documents to align SPA/API architecture decisions:
+   - `PRD.md` (scope, acceptance criteria, assumptions/open questions, DoD)
+   - `APP_FLOW.md` (rewritten to SPA routes + API-only interactions + polling contract)
+   - `TECH_STACK.md` (pinned frontend versions and NGINX/Vite runtime model)
+   - `FRONTEND_GUIDELINES.md` (SPA runtime rules, polling rule, MVP accessibility scope)
+   - `BACKEND_STRUCTURE.md` (SPA auth/workflow/admin API contract + runtime-config approval mode key)
+   - `README.md` (runtime model and SPA-oriented auth flow guidance)
+2. Rewrote implementation planning for frontend scope granularity:
+   - `IMPLEMENTATION_PLAN.md` split former Phase 9 into:
+     - Phase 9: API realignment + approval-mode config
+     - Phase 10: SPA platform/delivery topology
+     - Phase 11: core SPA workflow screens (MVP)
+     - Phase 12: frontend MVP validation + deferred UX scope
+   - Renumbered downstream phases:
+     - Security/Observability -> Phase 13
+     - Release readiness -> Phase 14
+     - Route-server Option B TODO -> Phase 15
+   - Added explicit blockers/dependencies for deferred/non-MVP frontend work.
+3. Added runtime config example key:
+   - `runtime-config.example.yaml` now includes `workflow.approval_mode`.
+
+Verification
+1. Documentation-only consistency review completed across updated docs.
+2. Checklist/blocker references in `IMPLEMENTATION_PLAN.md` were aligned with new phase numbering and dependencies.
+3. No implementation code or automated test execution changes were made in this update.
+
+In progress
+1. No active implementation tasks in this documentation update.
+
+Next
+1. Implement Phase 9 Step 9.1 to Step 9.6 (SPA API realignment + approval mode wiring).
+2. Implement Phase 10 Step 10.1 to Step 10.5 (SPA workspace + NGINX/Vite topology).
+3. Implement Phase 11 Step 11.1 to Step 11.6 (core SPA screens with polling).
+
+Known bugs / regressions
+1. None identified in this documentation-only update.
+
+---
+
+Update: 2026-02-11 (Phase ordering adjustment: backend-first before frontend)
+
+Decision
+1. Reordered the new frontend-era phases so backend/API prerequisites are delivered before frontend platform work:
+   - Phase 9 is now `API Realignment for SPA and Approval-Mode Config`.
+   - Phase 10 is now `SPA Platform and Delivery Topology`.
+
+Completed
+1. Updated `IMPLEMENTATION_PLAN.md` phase ordering and step numbering to enforce backend-first sequencing.
+2. Updated all dependent blocker links and references:
+   - configurable approval-mode blockers now target Phase 9 Step 9.4 to Step 9.5,
+   - SPA integration blockers now target Phase 10 Step 10.1 to Step 10.5 (plus Phase 11 screen work).
+
+Verification
+1. Reviewed `IMPLEMENTATION_PLAN.md` for reference consistency after renumbering.
+2. Confirmed no checklist completion-state changes were required.
+
+In progress
+1. No implementation code changes in this update.
+
+Next
+1. Execute Phase 9 (API realignment + approval mode) before any frontend implementation.
+2. Execute Phase 10 (SPA platform + delivery topology) after Phase 9 APIs are available.
+3. Continue with Phase 11 SPA screens once Phase 9 and Phase 10 are in place.
+
+Known bugs / regressions
+1. None identified for this documentation-only adjustment.
