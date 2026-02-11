@@ -39,7 +39,6 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] Requirement: approval mode must be defined in `runtime-config.yaml` (`workflow.approval_mode`).
 - [x] Scope decision: detailed `policy_auto` guardrail expansion is out of scope for `v0.1.0`; request eligibility relies on existing PeeringDB/local ASN/network authorization checks.
 - [x] Assumption: frontend runtime is strict SPA with client-side route ownership and API-only backend interactions.
-- [ ] Open question: target retry limits/backoff constants for self-hosted lifecycle operations should be finalized before Phase 8 production rollout.
 - [x] Assumption: Phase 8 lifecycle ownership targets a single self-hosted controller for `v0.1.0`; HA pair/topology orchestration is post-`v0.1.0` hardening and not a Phase 8 blocker.
 - [x] Open question resolved: for Auth Option A, empty associated-network assignment means unrestricted access when no rows exist.
 
