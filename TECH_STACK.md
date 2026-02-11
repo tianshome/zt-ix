@@ -1,6 +1,6 @@
 # Technical Stack
-Version: 0.5
-Date: 2026-02-10
+Version: 0.6
+Date: 2026-02-11
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 
@@ -29,9 +29,9 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 2. Redis 7.4.1
 
 ## 6. Frontend Delivery
-1. Jinja2 3.1.5
-2. HTMX 1.9.12
-3. Alpine.js 3.14.1
+1. ReactJS
+2. TypeScript
+3. shadcn-ui
 
 ## 7. Security and Config
 1. python-dotenv 1.0.1
@@ -96,7 +96,8 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 ## 12. Version Pinning Policy
 1. All Python dependencies must be pinned in `pyproject.toml` and lockfile (`uv.lock`) to exact versions above.
 2. Container image tags must use fixed versions, not `latest`.
-3. Any version change requires updating this file and changelog entry.
+3. Frontend dependencies must be pinned in the frontend lockfile once Phase 9 frontend implementation begins.
+4. Any version change requires updating this file and changelog entry.
 
 ## 13. Source References (Official Docs)
 1. PeeringDB OAuth docs: `https://docs.peeringdb.com/oauth/`

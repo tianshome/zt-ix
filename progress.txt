@@ -1104,3 +1104,37 @@ Next
 
 Known bugs / regressions
 1. None identified in this follow-up.
+
+---
+
+Update: 2026-02-11 (Frontend planning stack alignment for Phase 9)
+
+Decision
+1. Frontend implementation stack is now explicitly:
+   - ReactJS
+   - TypeScript
+   - shadcn-ui
+
+Completed
+1. Updated frontend stack definition in `TECH_STACK.md`:
+   - removed legacy Jinja2/HTMX/Alpine frontend delivery assumptions,
+   - documented ReactJS + TypeScript + shadcn-ui as the approved frontend delivery stack.
+2. Updated implementation-plan frontend wording in `IMPLEMENTATION_PLAN.md`:
+   - replaced legacy template-stack references with React/TypeScript/shadcn-ui terminology,
+   - clarified Phase 9 step descriptions around React bootstrap and shadcn-ui component implementation.
+
+Verification
+1. Documentation-only diff reviewed for consistency across:
+   - `TECH_STACK.md`
+   - `IMPLEMENTATION_PLAN.md`
+2. Confirmed no checklist completion state changes were required; frontend implementation steps remain open and blocked as documented.
+
+In progress
+1. No implementation code changes in this update.
+
+Next
+1. Start Phase 9 Step 9.1 frontend bootstrap using React + TypeScript.
+2. Begin Phase 9 Step 9.2 component implementation with shadcn-ui while adhering to `FRONTEND_GUIDELINES.md`.
+
+Known bugs / regressions
+1. None identified for this documentation-only update.

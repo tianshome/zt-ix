@@ -1,6 +1,6 @@
 # Implementation Plan
-Version: 1.6
-Date: 2026-02-10
+Version: 1.7
+Date: 2026-02-11
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
 
@@ -20,9 +20,9 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
   - Blocked by: Phase 4 Step 4.7.
   - Reason: approval-mode policy evaluator behavior and guardrails are not implemented yet.
 - [x] Queue placeholder has been replaced with real async dispatch.
-- [ ] UI/template integration for onboarding/dashboard/request/admin flows.
+- [ ] UI frontend integration for onboarding/dashboard/request/admin flows.
   - Blocked by: Phase 9 Step 9.1 to Step 9.4.
-  - Reason: current accepted scope uses JSON responses; frontend component/styling integration is deferred by plan.
+  - Reason: current accepted scope uses JSON responses; React/TypeScript/shadcn-ui frontend implementation is deferred by plan.
 - [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
 - [x] Self-hosted controller lifecycle ownership is implemented for planned scope (Phase 8 Step 8.1 to Step 8.5).
 
@@ -153,7 +153,7 @@ Steps:
   - Reason: product/security sign-off and policy evaluator implementation are pending.
 - [x] Queueing placeholder retained for defer-to-phase-5 behavior (`_enqueue_provisioning_attempt`).
 - [x] Replace queueing placeholder with real Celery task dispatch.
-- [ ] Integrate rendered UI/templates for workflow pages (Jinja2/HTMX/Alpine).
+- [ ] Integrate React/TypeScript/shadcn-ui frontend workflow pages for operator/admin routes.
   - Blocked by: Phase 9 Step 9.1 to Step 9.4.
   - Reason: JSON responses are accepted for the current state; frontend integration is intentionally deferred.
 
@@ -166,7 +166,7 @@ Exit criteria:
 - [x] Admin approval/retry triggers async provisioning dispatch.
 - [ ] Operator/admin rendered UI pages match frontend guidelines.
   - Blocked by: Phase 9 Step 9.1 to Step 9.4.
-  - Reason: template/UI layer not implemented yet.
+  - Reason: React frontend layer is not implemented yet.
 
 Verification:
 - [x] `pytest tests/workflow -q`
@@ -314,15 +314,15 @@ Verification:
 Implements: PRD UX clarity and accessibility requirements.
 
 Steps:
-- [ ] Step 9.1: Apply styles/components from `FRONTEND_GUIDELINES.md`.
-- [ ] Step 9.2: Implement responsive layout behavior for mobile and desktop.
+- [ ] Step 9.1: Bootstrap React + TypeScript frontend shell and shared layout for core routes.
+- [ ] Step 9.2: Implement shadcn-ui based components styled per `FRONTEND_GUIDELINES.md`.
 - [ ] Step 9.3: Add accessibility checks (keyboard, focus, contrast, non-color status cues).
 - [ ] Step 9.4: Add empty/error states for all critical screens.
 
 Blocked items:
 - [ ] Integrate real UI for `/onboarding`, `/dashboard`, `/requests/:id`, `/admin/requests`, `/admin/requests/:id`.
   - Blocked by: Phase 9 execution start.
-  - Reason: current state intentionally accepts JSON responses; template/UI layer has not started.
+  - Reason: current state intentionally accepts JSON responses; React frontend layer has not started.
 
 Exit criteria:
 - [ ] Core routes are usable on mobile and desktop.
