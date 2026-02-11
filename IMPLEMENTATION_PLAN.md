@@ -333,11 +333,7 @@ Steps:
   - do not add additional policy guardrails in `v0.1.0`,
   - emit explicit audit metadata for auto-approved decisions.
 - [ ] Step 9.6: Add/adjust automated tests for JSON auth callbacks, onboarding context, admin list/detail APIs, and approval-mode behavior.
-
-Blocked items:
-- [ ] Remove legacy redirect-style auth routes and compatibility behavior.
-  - Blocked by: Phase 11 Step 11.1 to Step 11.3.
-  - Reason: SPA login/callback/request screens must consume replacement APIs before final route removal.
+- [ ] Step 9.7: Remove legacy redirect-style auth routes and compatibility behavior and clean up FastAPI-related modules.
 
 Exit criteria:
 - [ ] SPA-required auth/workflow/admin APIs exist and are test-covered.
