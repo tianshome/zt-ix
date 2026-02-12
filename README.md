@@ -103,14 +103,15 @@ npm run dev
 
 Vite serves on `http://localhost:5173` and proxies `/api/*` requests to `http://localhost:8000`.
 
-### Run production-like web/api topology (NGINX + FastAPI containers)
+### Run production-like web/api/worker topology (NGINX + FastAPI + Celery containers)
 ```bash
-docker compose --profile prod-like up --build web
+docker compose --profile prod-like up --build web worker
 ```
 
 This profile starts:
 - `web` (NGINX SPA static server) on `http://localhost:8080`
 - `api` (FastAPI) on `http://localhost:8000`
+- `worker` (Celery) for async provisioning/task execution
 - dependency services (`postgres`, `redis`, `zerotier-controller`) required by API startup
 
 ### Verification commands

@@ -359,18 +359,18 @@ Steps:
 - [x] Step 10.1: Bootstrap frontend workspace (`frontend/`) using pinned React/TypeScript/Vite/npm versions from `TECH_STACK.md`.
 - [x] Step 10.2: Implement client-side router and shared app shell for `/`, `/login`, `/auth/callback`, `/onboarding`, `/dashboard`, `/requests/:id`, `/admin/requests`, `/admin/requests/:id`.
 - [x] Step 10.3: Add production NGINX web container assets/config for SPA static serving and `/api/*` reverse proxy to FastAPI service container.
-- [x] Step 10.4: Update `docker-compose.yml` for production-like profile with separate `web` and `api` services.
+- [x] Step 10.4: Update `docker-compose.yml` for production-like profile with separate `web`, `api`, and `worker` services.
 - [x] Step 10.5: Add Vite dev proxy config and local SPA run instructions (`vite serve` -> `localhost:8000` API proxy).
 
 Exit criteria:
 - [x] SPA router owns browser routes.
-- [x] Production compose profile documents NGINX web container + API container topology.
+- [x] Production compose profile documents NGINX web container + API/worker container topology.
 - [x] Local development can run SPA via Vite proxy without backend template routes.
 
 Verification:
 - [x] `npm ci` (inside `frontend/`)
 - [x] `npm run build` (inside `frontend/`)
-- [x] `docker compose --profile prod-like config` shows `web` -> `api` topology wiring.
+- [x] `docker compose --profile prod-like config` shows `web` + `api` + `worker` topology wiring.
 
 ## 13. Phase 11: Core SPA Workflow Screens (MVP)
 Implements: PRD operator/admin UI scope for `v0.1.0`.

@@ -1636,3 +1636,26 @@ Next
 
 Known bugs / regressions
 1. None identified in this scoped change.
+
+---
+
+Update: 2026-02-12 (Compose: added Celery worker container)
+
+Completed
+1. Added `worker` service to `docker-compose.yml` for Celery execution in the `prod-like` profile.
+2. Reused the existing app image/runtime wiring and set Celery command to `uv run celery --app app.provisioning.tasks:celery_app worker --loglevel=INFO`.
+3. Aligned docs for production-like topology updates:
+   - `README.md` now runs `web` + `worker` and documents worker startup.
+   - `IMPLEMENTATION_PLAN.md` Phase 10 Step 10.4 text now reflects `web` + `api` + `worker` compose topology.
+
+Verification
+1. `docker compose --profile prod-like config` passed.
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Optionally run `docker compose --profile prod-like up --build web worker` and verify worker consumes queued provisioning tasks in a live flow.
+
+Known bugs / regressions
+1. None identified from file-level changes.

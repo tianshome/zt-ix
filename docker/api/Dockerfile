@@ -1,4 +1,4 @@
-FROM python:3.13.1-slim
+FROM ghcr.io/astral-sh/uv:0.10.2-python3.12-alpine
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -6,8 +6,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy
 
 WORKDIR /app
-
-RUN pip install --no-cache-dir uv==0.5.20
 
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project

@@ -54,25 +54,12 @@ services:
     environment:
       APP_ENV: production
       APP_SECRET_KEY: "${APP_SECRET_KEY:-replace-with-strong-secret}"
-      SESSION_COOKIE_SECURE: "${SESSION_COOKIE_SECURE:-true}"
-      LOCAL_AUTH_ENABLED: "${LOCAL_AUTH_ENABLED:-true}"
       DATABASE_URL: "postgresql+psycopg://postgres:postgres@postgres:5432/zt_ix"
       REDIS_URL: "redis://redis:6379/0"
-      PEERINGDB_CLIENT_ID: "${PEERINGDB_CLIENT_ID:-replace-with-client-id}"
-      PEERINGDB_CLIENT_SECRET: "${PEERINGDB_CLIENT_SECRET:-replace-with-client-secret}"
-      PEERINGDB_REDIRECT_URI: "${PEERINGDB_REDIRECT_URI:-http://localhost:8080/auth/callback}"
       ZTIX_RUNTIME_CONFIG_PATH: "${ZTIX_RUNTIME_CONFIG_PATH:-runtime-config.yaml}"
       ZT_PROVIDER: "self_hosted_controller"
       ZT_CONTROLLER_BASE_URL: "http://zerotier-controller:9993/controller"
       ZT_CONTROLLER_AUTH_TOKEN: "${ZT_CONTROLLER_AUTH_TOKEN:-replace-with-controller-token}"
-      ZT_CONTROLLER_AUTH_TOKEN_FILE: "${ZT_CONTROLLER_AUTH_TOKEN_FILE:-}"
-      ZT_CONTROLLER_REQUIRED_NETWORK_IDS: "${ZT_CONTROLLER_REQUIRED_NETWORK_IDS:-}"
-      ZT_CONTROLLER_READINESS_STRICT: "${ZT_CONTROLLER_READINESS_STRICT:-true}"
-      ZT_CONTROLLER_BACKUP_DIR: "${ZT_CONTROLLER_BACKUP_DIR:-/var/backups/zt-ix-controller}"
-      ZT_CONTROLLER_BACKUP_RETENTION_COUNT: "${ZT_CONTROLLER_BACKUP_RETENTION_COUNT:-14}"
-      ZT_CONTROLLER_STATE_DIR: "${ZT_CONTROLLER_STATE_DIR:-/var/lib/zerotier-one}"
-      ZT_CENTRAL_BASE_URL: "${ZT_CENTRAL_BASE_URL:-https://api.zerotier.com/api/v1}"
-      ZT_CENTRAL_API_TOKEN: "${ZT_CENTRAL_API_TOKEN:-replace-with-central-token}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,6 +71,39 @@ services:
       - zt_ix_zerotier_controller_data:/var/lib/zerotier-one:ro
     ports:
       - "${API_HOST_PORT:-8000}:8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    environment:
+      APP_ENV: production
+      APP_SECRET_KEY: "${APP_SECRET_KEY:-replace-with-strong-secret}"
+      DATABASE_URL: "postgresql+psycopg://postgres:postgres@postgres:5432/zt_ix"
+      REDIS_URL: "redis://redis:6379/0"
+      ZTIX_RUNTIME_CONFIG_PATH: "${ZTIX_RUNTIME_CONFIG_PATH:-runtime-config.yaml}"
+      ZT_PROVIDER: "self_hosted_controller"
+      ZT_CONTROLLER_BASE_URL: "http://zerotier-controller:9993/controller"
+      ZT_CONTROLLER_AUTH_TOKEN: "${ZT_CONTROLLER_AUTH_TOKEN:-replace-with-controller-token}"
+    command:
+      [
+        "uv",
+        "run",
+        "celery",
+        "--app",
+        "app.provisioning.tasks:celery_app",
+        "worker",
+        "--loglevel=INFO",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      zerotier-controller:
+        condition: service_healthy
+    volumes:
+      - zt_ix_zerotier_controller_data:/var/lib/zerotier-one:ro
 
   web:
     profiles: ["prod-like"]
