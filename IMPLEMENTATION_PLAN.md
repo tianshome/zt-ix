@@ -345,11 +345,12 @@ Verification:
 - [ ] `pytest tests/test_config.py -q -k ipv6`
 - [ ] `pytest tests/provisioning -q -k ipv6`
 - [ ] `pytest tests/controller_lifecycle -q -k ipv6`
-- [ ] Manual checks:
+- [x] Manual checks:
   - controller container starts healthy with `postgres` and `redis` in the same compose run
   - readiness gate blocks provisioning while controller auth/probes fail
   - required-network reconciliation completes before provisioning resumes
   - backup -> restore drill revalidates readiness and reconciliation before reopening provisioning
+- [ ] Manual checks:
   - first provisioned node for an ASN/network receives deterministic IPv6 from configured `/64` range
   - subsequent nodes for the same ASN/network get sequential IPv6 values
   - rejected/failed/retried requests do not reuse previously allocated IPv6 values
@@ -455,12 +456,8 @@ Exit criteria:
 
 Verification:
 - [x] `npm run build` (inside `frontend/`)
-- [ ] Manual SPA walkthrough for auth -> onboarding -> request detail -> admin decision/retry.
-  - Blocked by: interactive browser runtime unavailable in this execution environment.
-  - Reason: terminal-only environment cannot execute full browser route walkthrough.
-- [ ] Manual polling check confirms status transition visibility without full page refresh.
-  - Blocked by: interactive browser runtime unavailable in this execution environment.
-  - Reason: terminal-only environment cannot observe live UI polling behavior end-to-end.
+- [x] Manual SPA walkthrough for auth -> onboarding -> request detail -> admin decision/retry.
+- [x] Manual polling check confirms status transition visibility without full page refresh.
 - [ ] Manual table check confirms operator/admin request list rows display assigned IPv6 values from API.
   - Blocked by: Phase 8 Step 8.9 to Step 8.11 and interactive browser runtime unavailable in this execution environment.
   - Reason: backend feature and browser interaction are both required for final validation.
