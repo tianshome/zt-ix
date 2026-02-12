@@ -1761,3 +1761,43 @@ Next
 
 Known bugs / regressions
 1. None identified in this scoped fix.
+
+---
+
+Update: 2026-02-12 (Planning: Phase 8 IPv6 deterministic assignment scope added)
+
+Completed
+1. Updated `IMPLEMENTATION_PLAN.md` Phase 8 with new IPv6 extension checklist steps (8.7 to 8.11).
+2. Captured confirmed design decisions in plan scope/steps:
+   - fixed ASN encoding `decimal_split_2_4` (left-zero-pad shorter ASNs),
+   - never-reuse allocation policy,
+   - one IPv6 `/64` prefix per required ZeroTier network suffix from runtime YAML,
+   - simplest ordering path: sequence allocation at provisioning time.
+3. Added corresponding Phase 8 exit criteria and verification checklist placeholders for config validation, allocator behavior, provider payloads, and IPv6-only provisioning.
+
+In progress
+1. No implementation code changes in this update.
+
+Next
+1. Update `PRD.md` and `BACKEND_STRUCTURE.md` IPv6 contracts to match the new Phase 8 plan items.
+2. Implement Phase 8 Step 8.7 and Step 8.8 (runtime config schema + allocator design/migration) in small reviewable increments.
+
+Known bugs / regressions
+1. None identified for this documentation-only update.
+
+Update addendum: 2026-02-12 (IPv6 plan clarification: SQL persistence + request-list UI)
+
+Completed
+1. Updated `IMPLEMENTATION_PLAN.md` Phase 8 to explicitly require SQL persistence of assigned IPv6 with per-request (`join_request_id`) association.
+2. Updated Phase 8 coverage/exit criteria to require SQL-backed request-level IPv6 visibility.
+3. Added new Phase 11 Step 11.7 to update operator/admin request list tables to display assigned IPv6 (with `unassigned` fallback) once backend IPv6 persistence/API exposure is complete.
+4. Added blocked-state metadata for Step 11.7 and related manual/exit checks, tied to Phase 8 Step 8.9 to Step 8.11.
+
+In progress
+1. No implementation code changes in this addendum.
+
+Next
+1. Implement Phase 8 Step 8.7 to Step 8.9 (config + DB persistence), then expose request-list IPv6 data and complete Phase 11 Step 11.7.
+
+Known bugs / regressions
+1. None identified for this documentation-only addendum.

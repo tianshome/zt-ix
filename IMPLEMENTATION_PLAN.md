@@ -23,6 +23,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
   - Reason: SPA runtime foundation is complete; core workflow screens are not implemented yet.
 - [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
 - [x] Self-hosted controller lifecycle canonical network-ID derivation is complete (Phase 8 Step 8.6).
+- [ ] Phase 8 IPv6 deterministic member assignment extension is not implemented yet (Step 8.7 to Step 8.11).
 - [x] Phase 9 API realignment for SPA and approval-mode config is complete.
 
 ## 1. Planning Assumptions and Open Questions
@@ -243,7 +244,7 @@ Implements: PRD `F4`, `F6`, `F7`, `F9`.
 Goal: implement minimum viable lifecycle ownership for self-hosted controller operation in release environments, without ZeroTier Central feature parity.
 
 Scope boundaries:
-- In scope: readiness/auth gating, required-network reconciliation, token reload control, backup/restore validation drill, and lifecycle audit events.
+- In scope: readiness/auth gating, required-network reconciliation, token reload control, backup/restore validation drill, lifecycle audit events, and deterministic IPv6 member assignment in self-hosted mode.
 - Out of scope: ZeroTier Central feature parity, Central org/user/team workflows, billing workflows, and custom roots/planet orchestration.
 
 Steps:
@@ -287,6 +288,35 @@ Steps:
     - compose full 16-char network IDs in Python (`prefix + suffix`) before reconciliation,
     - reject malformed/duplicate suffixes and reject mixed full-ID repetition in suffix-only config mode,
     - emit lifecycle audit metadata for prefix discovery + suffix expansion outcomes.
+- [ ] Step 8.7: Add per-network IPv6 prefix runtime configuration for self-hosted mode.
+  - Minimum behaviors:
+    - add runtime-config schema fields for `zerotier.self_hosted_controller.ipv6.prefixes_by_network_suffix`,
+    - require one IPv6 `/64` prefix per required network suffix and reject invalid/missing mappings,
+    - keep ASN encoding fixed to `decimal_split_2_4` (no runtime option),
+    - make IPv4 assignment disabled for this provisioning path.
+- [ ] Step 8.8: Implement deterministic ASN-scoped IPv6 allocator with never-reuse semantics.
+  - Minimum behaviors:
+    - encode ASN with `decimal_split_2_4` using left-zero-padding for shorter ASNs,
+    - allocate sequential suffix values per (`zt_network_id`, `asn`) during provisioning,
+    - never reuse released values; allocation history remains monotonic for each (`zt_network_id`, `asn`),
+    - persist the allocation sequence so retries and restarts remain deterministic.
+- [ ] Step 8.9: Persist allocation state with idempotent retry behavior.
+  - Minimum behaviors:
+    - add DB schema/repository support for allocation rows and monotonic counters,
+    - persist assigned IPv6 address in SQL with explicit `join_request_id` association for request-level lookups,
+    - guarantee one stable IPv6 assignment per `join_request_id` across retries,
+    - ensure concurrent worker runs cannot issue duplicate IPv6 addresses.
+- [ ] Step 8.10: Wire IPv6 assignment into provider + lifecycle reconciliation.
+  - Minimum behaviors:
+    - include explicit member `ipAssignments` in self-hosted controller authorize/update payloads,
+    - enforce `noAutoAssignIps` + manual member assignment behavior,
+    - reconcile network config so managed routes include configured `/64` prefixes and IPv4 auto-assignment is disabled.
+- [ ] Step 8.11: Add automated and manual validation coverage for IPv6-only provisioning.
+  - Minimum coverage:
+    - runtime-config parsing/validation for per-network `/64` prefixes,
+    - allocator sequencing/non-reuse/concurrency behavior,
+    - provider payload assertions for explicit IPv6 `ipAssignments`,
+    - end-to-end provisioning path stores and surfaces IPv6-only `assigned_ips` from SQL-backed request associations.
 
 Exit criteria:
 - [x] `zerotier/zerotier:1.14.2` controller runs on `9993` (TCP API + UDP transport) in the same compose stack as `postgres` and `redis`.
@@ -294,6 +324,9 @@ Exit criteria:
 - [x] Required controller networks reconcile before member authorization attempts run.
 - [x] Token reload control and backup/restore validation drill are auditable and test-backed.
 - [x] Required-network configuration is suffix-only and expanded from live controller prefix without repeated full-ID literals.
+- [ ] Deterministic IPv6 member assignment is provisioned per network prefix using fixed `decimal_split_2_4` ASN encoding.
+- [ ] IPv6 allocation is monotonic and never reused for a given (`zt_network_id`, `asn`) sequence space.
+- [ ] Assigned IPv6 is persisted in SQL and queryable per request for operator/admin workflow views.
 - [ ] Release profile behavior is validated without `ZT_CENTRAL_API_TOKEN` dependency.
   - Blocked by: Phase 14 Step 14.5.
   - Reason: staging/release-gate validation has not been executed in this environment.
@@ -309,11 +342,17 @@ Verification:
 - [x] `pytest tests/controller_lifecycle -q`
 - [x] `pytest tests/provisioning -q -k lifecycle`
 - [x] `pytest tests/controller_lifecycle -q -k suffix`
+- [ ] `pytest tests/test_config.py -q -k ipv6`
+- [ ] `pytest tests/provisioning -q -k ipv6`
+- [ ] `pytest tests/controller_lifecycle -q -k ipv6`
 - [ ] Manual checks:
   - controller container starts healthy with `postgres` and `redis` in the same compose run
   - readiness gate blocks provisioning while controller auth/probes fail
   - required-network reconciliation completes before provisioning resumes
   - backup -> restore drill revalidates readiness and reconciliation before reopening provisioning
+  - first provisioned node for an ASN/network receives deterministic IPv6 from configured `/64` range
+  - subsequent nodes for the same ASN/network get sequential IPv6 values
+  - rejected/failed/retried requests do not reuse previously allocated IPv6 values
 
 ## 11. Phase 9: API Realignment for SPA and Approval-Mode Config
 Implements: PRD `F1`, `F2`, `F3`, `F5`, SPA/API contract decisions.
@@ -387,6 +426,13 @@ Steps:
 - [x] Step 11.4: Implement admin pages (`/admin/requests`, `/admin/requests/:id`) with approve/reject/retry actions.
 - [x] Step 11.5: Use shadcn/Radix data-table primitives for admin/operator tables with MVP behavior only.
 - [x] Step 11.6: Add minimum viable empty/error states for critical screens.
+- [ ] Step 11.7: Add assigned IPv6 display to operator/admin request list tables.
+  - Minimum behaviors:
+    - show assigned IPv6 from API/SQL-backed request association in dashboard/admin request list rows,
+    - display deterministic fallback (`unassigned`) when request has no assigned IPv6 yet,
+    - keep table behavior within existing MVP shadcn/Radix table patterns.
+  - Blocked by: Phase 8 Step 8.9 to Step 8.11.
+  - Reason: per-request IPv6 persistence and finalized API exposure must land before UI rendering can be completed and validated.
 
 Blocked items:
 - [ ] Large-scale table optimization (virtualization, advanced sort persistence, server-driven pagination tuning).
@@ -403,6 +449,9 @@ Exit criteria:
 - [x] Login/onboarding/operator/admin SPA routes are usable end-to-end with backend APIs.
 - [x] Status updates are visible via HTTP polling without manual page reloads.
 - [x] Core request/admin actions are available from SPA screens.
+- [ ] Operator/admin request list tables show assigned IPv6 when available.
+  - Blocked by: Phase 8 Step 8.9 to Step 8.11 and Phase 11 Step 11.7.
+  - Reason: UI exposure depends on backend IPv6 persistence + API surfacing.
 
 Verification:
 - [x] `npm run build` (inside `frontend/`)
@@ -412,6 +461,9 @@ Verification:
 - [ ] Manual polling check confirms status transition visibility without full page refresh.
   - Blocked by: interactive browser runtime unavailable in this execution environment.
   - Reason: terminal-only environment cannot observe live UI polling behavior end-to-end.
+- [ ] Manual table check confirms operator/admin request list rows display assigned IPv6 values from API.
+  - Blocked by: Phase 8 Step 8.9 to Step 8.11 and interactive browser runtime unavailable in this execution environment.
+  - Reason: backend feature and browser interaction are both required for final validation.
 
 ## 14. Phase 12: Frontend MVP Validation and Deferred UX Scope
 Implements: final frontend quality gate for `v0.1.0`.
