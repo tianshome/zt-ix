@@ -211,15 +211,28 @@ def api_create_request(
             notes=payload.notes,
         )
     except DuplicateActiveRequestError:
-        existing = request_repo.get_active_for_asn_network(payload.asn, network_row.id)
-        detail: dict[str, Any] = {"asn": payload.asn, "zt_network_id": network_row.id}
+        existing = request_repo.get_active_for_asn_network(
+            payload.asn,
+            network_row.id,
+            node_id=payload.node_id,
+        )
+        detail: dict[str, Any] = {
+            "asn": payload.asn,
+            "zt_network_id": network_row.id,
+            "node_id": payload.node_id,
+        }
         if existing is not None and existing.user_id == actor.user_id:
             detail["existing_request_id"] = str(existing.id)
             detail["existing_request_url"] = f"/requests/{existing.id}"
+        duplicate_message = "An active request already exists for this ASN, network, and node ID."
+        if payload.node_id is None:
+            duplicate_message = (
+                "An active request without a node ID already exists for this ASN and network."
+            )
         return _error_response(
             status_code=409,
             code="duplicate_active_request",
-            message="An active request already exists for this ASN and network.",
+            message=duplicate_message,
             details=detail,
         )
 

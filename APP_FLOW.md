@@ -103,7 +103,7 @@ Error branches:
 3. Invalid local username/password: API returns deterministic auth error and writes audit event.
 4. Disabled local credential: API returns support-path error code.
 5. ASN ownership mismatch at submit time: API returns validation error and SPA keeps user on `/onboarding`.
-6. Duplicate active request for same ASN/network: API returns deterministic conflict including existing request reference.
+6. Duplicate active request for same ASN/network/`node_id` key: API returns deterministic conflict including existing request reference.
 
 ## 6. Server CLI Local Account Provisioning Flow (Auth Option A)
 Trigger: admin/operator with server shell access runs local provisioning command.

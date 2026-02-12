@@ -223,12 +223,33 @@ class JoinRequest(Base):
         Index("idx_join_request_status", "status"),
         Index("idx_join_request_user", "user_id"),
         Index(
-            "uq_join_request_active_per_asn_network",
+            "uq_join_request_active_per_asn_network_with_node",
+            "asn",
+            "zt_network_id",
+            "node_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('pending', 'approved', 'provisioning', 'active') "
+                "AND node_id IS NOT NULL"
+            ),
+            sqlite_where=text(
+                "status IN ('pending', 'approved', 'provisioning', 'active') "
+                "AND node_id IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_join_request_active_per_asn_network_without_node",
             "asn",
             "zt_network_id",
             unique=True,
-            postgresql_where=text("status IN ('pending', 'approved', 'provisioning', 'active')"),
-            sqlite_where=text("status IN ('pending', 'approved', 'provisioning', 'active')"),
+            postgresql_where=text(
+                "status IN ('pending', 'approved', 'provisioning', 'active') "
+                "AND node_id IS NULL"
+            ),
+            sqlite_where=text(
+                "status IN ('pending', 'approved', 'provisioning', 'active') "
+                "AND node_id IS NULL"
+            ),
         ),
     )
 

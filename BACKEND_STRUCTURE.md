@@ -34,8 +34,10 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
 3. Local credential usernames are unique after normalization (lowercase and trimmed).
 4. A user can only create requests for ASNs currently linked to that user from either PeeringDB sync or local assignment.
 5. If user-level associated-network rows exist, request target network must be within that association set.
-6. Only one active request exists per (`asn`, `zt_network_id`) across statuses:
-   - `pending`, `approved`, `provisioning`, `active`
+6. Active request uniqueness is scoped by (`asn`, `zt_network_id`, `node_id`) across statuses:
+   - exact duplicates for the same key are blocked in `pending`, `approved`, `provisioning`, `active`
+   - different `node_id` values for the same ASN/network can coexist
+   - `node_id IS NULL` is treated as its own single active slot per (`asn`, `zt_network_id`)
 7. Request state transitions must follow `APP_FLOW.md`.
 8. `zt_membership` is one-to-one with `join_request` and unique per (`zt_network_id`, `node_id`).
 9. In self-hosted mode, provisioning must fail closed when controller lifecycle preflight is unhealthy.
@@ -161,9 +163,12 @@ CREATE TABLE audit_event (
 
 CREATE INDEX idx_join_request_status ON join_request(status);
 CREATE INDEX idx_join_request_user ON join_request(user_id);
-CREATE UNIQUE INDEX uq_join_request_active_per_asn_network
+CREATE UNIQUE INDEX uq_join_request_active_per_asn_network_with_node
+  ON join_request(asn, zt_network_id, node_id)
+  WHERE status IN ('pending', 'approved', 'provisioning', 'active') AND node_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_join_request_active_per_asn_network_without_node
   ON join_request(asn, zt_network_id)
-  WHERE status IN ('pending', 'approved', 'provisioning', 'active');
+  WHERE status IN ('pending', 'approved', 'provisioning', 'active') AND node_id IS NULL;
 CREATE INDEX idx_audit_event_created_at ON audit_event(created_at);
 CREATE INDEX idx_local_credential_user_id ON local_credential(user_id);
 CREATE INDEX idx_user_network_access_user_id ON user_network_access(user_id);
@@ -292,7 +297,7 @@ All API responses are JSON.
    - `201`: request created in `pending`.
    - `400`: validation error.
    - `403`: ASN not authorized for user.
-   - `409`: duplicate active request.
+   - `409`: duplicate active request for same ASN/network/`node_id` key.
 9. `GET /api/v1/requests`
    - Auth: user session required.
    - `200`: user-owned request list.

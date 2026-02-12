@@ -50,12 +50,22 @@ class JoinRequestRepository:
         statement = statement.order_by(JoinRequest.requested_at.desc())
         return list(self._session.execute(statement).scalars())
 
-    def get_active_for_asn_network(self, asn: int, zt_network_id: str) -> JoinRequest | None:
+    def get_active_for_asn_network(
+        self,
+        asn: int,
+        zt_network_id: str,
+        *,
+        node_id: str | None = None,
+    ) -> JoinRequest | None:
         statement = select(JoinRequest).where(
             JoinRequest.asn == asn,
             JoinRequest.zt_network_id == zt_network_id,
             JoinRequest.status.in_(ACTIVE_REQUEST_STATUSES),
         )
+        if node_id is None:
+            statement = statement.where(JoinRequest.node_id.is_(None))
+        else:
+            statement = statement.where(JoinRequest.node_id == node_id)
         return self._session.execute(statement).scalar_one_or_none()
 
     def create_pending_request(
@@ -82,7 +92,8 @@ class JoinRequestRepository:
         except IntegrityError as exc:
             if _is_duplicate_active_request_error(exc):
                 raise DuplicateActiveRequestError(
-                    f"active join request already exists for asn={asn} network={zt_network_id}"
+                    "active join request already exists for "
+                    f"asn={asn} network={zt_network_id} node_id={node_id or '<none>'}"
                 ) from exc
             raise
         return request
@@ -125,6 +136,9 @@ class JoinRequestRepository:
 def _is_duplicate_active_request_error(exc: IntegrityError) -> bool:
     message = str(exc.orig).lower()
     return (
-        "uq_join_request_active_per_asn_network" in message
+        "uq_join_request_active_per_asn_network_with_node" in message
+        or "uq_join_request_active_per_asn_network_without_node" in message
+        or "uq_join_request_active_per_asn_network" in message
+        or "join_request.asn, join_request.zt_network_id, join_request.node_id" in message
         or "join_request.asn, join_request.zt_network_id" in message
     )

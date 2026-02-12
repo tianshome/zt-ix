@@ -99,8 +99,8 @@ Acceptance criteria:
 
 ### F3. Join Request Workflow
 Acceptance criteria:
-1. Operator can create one active request per ASN per target IX network.
-2. Duplicate in-flight requests return deterministic conflict message.
+1. Operator can create one active request per ASN per target IX network per `node_id`.
+2. Requests with different `node_id` values for the same ASN/network are allowed; duplicate in-flight requests for the same ASN/network/`node_id` return deterministic conflict message.
 3. Request status transitions are strictly enforced:
    - `pending -> approved|rejected`
    - `approved -> provisioning`

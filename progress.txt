@@ -1686,3 +1686,53 @@ Next
 
 Known bugs / regressions
 1. None identified for the worker broker startup fix.
+
+---
+
+Update: 2026-02-12 (Join request uniqueness scoped by node_id)
+
+Completed
+1. Updated join-request active uniqueness to treat `node_id` as part of the request identity.
+2. Added node-aware partial unique indexes in ORM metadata:
+   - `uq_join_request_active_per_asn_network_with_node` on (`asn`, `zt_network_id`, `node_id`) for active statuses when `node_id IS NOT NULL`.
+   - `uq_join_request_active_per_asn_network_without_node` on (`asn`, `zt_network_id`) for active statuses when `node_id IS NULL`.
+3. Added Alembic migration `20260212_0003` to replace the old active-request index with the two node-scoped indexes (and reversible downgrade behavior).
+4. Updated duplicate-conflict repository and workflow handling to look up existing active requests by (`asn`, `zt_network_id`, `node_id`) and return node-aware conflict details.
+5. Updated DB and workflow tests to cover:
+   - allowing same ASN/network with different `node_id`,
+   - rejecting exact duplicate ASN/network/`node_id`,
+   - preserving duplicate protection for null-`node_id` active requests.
+6. Updated planning/contract docs (`PRD.md`, `APP_FLOW.md`, `BACKEND_STRUCTURE.md`) to reflect the new invariant.
+
+Verification
+1. `uv run pytest tests/db/test_join_request_invariants.py -q` passed.
+2. `uv run pytest tests/workflow/test_request_workflow_integration.py -q` passed.
+3. `uv run ruff check app/db/models.py app/repositories/join_requests.py app/repositories/errors.py app/routes/workflow.py tests/db/test_join_request_invariants.py tests/workflow/test_request_workflow_integration.py alembic/versions/20260212_0003_join_request_node_scoped_active_uniqueness.py` passed.
+4. `uv run mypy app/repositories/join_requests.py app/routes/workflow.py tests/db/test_join_request_invariants.py tests/workflow/test_request_workflow_integration.py` passed.
+5. `uv run env DATABASE_URL=sqlite:////tmp/zt_ix_node_scope.db alembic upgrade head && uv run env DATABASE_URL=sqlite:////tmp/zt_ix_node_scope.db alembic downgrade base && uv run env DATABASE_URL=sqlite:////tmp/zt_ix_node_scope.db alembic upgrade head` passed.
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Optional: run full backend test suite for broader regression coverage.
+2. Optional: run migration lifecycle against local PostgreSQL profile to mirror production dialect behavior.
+
+Known bugs / regressions
+1. None identified in this scoped change.
+
+Update addendum: 2026-02-12 (PostgreSQL migration-path verification for node-scoped request uniqueness)
+
+Completed
+1. Started local PostgreSQL container on host port `55433` and validated the new migration on PostgreSQL dialect.
+2. Verified targeted migration reversibility for the new revision only:
+   - `20260212_0003 -> 20260210_0002 -> 20260212_0003` succeeded.
+3. Stopped the temporary PostgreSQL container after verification.
+
+Verification
+1. `POSTGRES_HOST_PORT=55433 docker compose up -d postgres` passed.
+2. `uv run env DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55433/zt_ix alembic downgrade 20260210_0002 && uv run env DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55433/zt_ix alembic upgrade head` passed.
+3. `docker compose stop postgres` passed.
+
+Known bugs / regressions
+1. Existing historical migration downgrade path issue (pre-existing to this change): full `head -> base` downgrade on PostgreSQL fails in `20260210_0002` downgrade when attempting to restore `app_user.peeringdb_user_id` to `NOT NULL` while null-valued rows exist.

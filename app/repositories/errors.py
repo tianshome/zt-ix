@@ -8,7 +8,7 @@ class RepositoryError(Exception):
 
 
 class DuplicateActiveRequestError(RepositoryError):
-    """Raised when an active join request already exists for ASN/network."""
+    """Raised when an active join request already exists for ASN/network/node identity."""
 
 
 class InvalidStateTransitionError(RepositoryError):

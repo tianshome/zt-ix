@@ -73,7 +73,7 @@ def test_onboarding_context_returns_eligible_asns_and_network_constraints(
     assert body["constraints"]["blocked_reason"] is None
 
 
-def test_create_request_enforces_ownership_and_duplicate_conflict(
+def test_create_request_allows_distinct_node_ids_and_enforces_duplicate_conflict(
     client: TestClient,
     db_session: Session,
     stub_peeringdb_client: StubPeeringDBClient,
@@ -96,13 +96,22 @@ def test_create_request_enforces_ownership_and_duplicate_conflict(
     created_request = create_response.json()["data"]["request"]
     assert created_request["status"] == "pending"
 
+    second_create_response = client.post(
+        "/api/v1/requests",
+        json={"asn": 64512, "zt_network_id": "abcdef0123456789", "node_id": "ffffe12345"},
+    )
+    assert second_create_response.status_code == 201
+    second_created_request = second_create_response.json()["data"]["request"]
+    assert second_created_request["status"] == "pending"
+
     duplicate_response = client.post(
         "/api/v1/requests",
-        json={"asn": 64512, "zt_network_id": "abcdef0123456789"},
+        json={"asn": 64512, "zt_network_id": "abcdef0123456789", "node_id": "abcde12345"},
     )
     duplicate_body = duplicate_response.json()["error"]
     assert duplicate_response.status_code == 409
     assert duplicate_body["code"] == "duplicate_active_request"
+    assert duplicate_body["details"]["node_id"] == "abcde12345"
     assert duplicate_body["details"]["existing_request_id"] == created_request["id"]
     assert duplicate_body["details"]["existing_request_url"] == f"/requests/{created_request['id']}"
 
@@ -123,8 +132,11 @@ def test_create_request_enforces_ownership_and_duplicate_conflict(
         .scalars()
         .all()
     )
-    assert len(created_audits) == 1
-    assert created_audits[0].target_id == created_request["id"]
+    assert len(created_audits) == 2
+    assert {audit.target_id for audit in created_audits} == {
+        created_request["id"],
+        second_created_request["id"],
+    }
 
 
 def test_operator_request_api_is_user_scoped(
