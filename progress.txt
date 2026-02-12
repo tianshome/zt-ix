@@ -1906,3 +1906,36 @@ Next
 Known bugs / regressions
 1. No regressions detected in lint/typecheck/automated tests for this scope.
 2. Phase 8 IPv6 manual runtime checks in the implementation plan remain open and require environment-backed manual execution.
+
+---
+
+Update: 2026-02-12 (Phase 11 Step 11.7 complete: assigned IPv6 rendered in operator/admin request list tables)
+
+Completed
+1. Implemented Phase 11 Step 11.7 frontend table rendering for assigned IPv6 values in both request list screens:
+   - Operator dashboard request table (`/dashboard`).
+   - Admin request queue table (`/admin/requests`).
+2. Added deterministic fallback rendering `unassigned` when `assigned_ipv6` is not present.
+3. Extended frontend API typings so request rows include backend-emitted IPv6 fields:
+   - `JoinRequest.assigned_ipv6`
+   - `JoinRequest.ipv6_assignment`
+4. Updated implementation tracking:
+   - `IMPLEMENTATION_PLAN.md` version bumped to `2.5`.
+   - Marked Step `11.7` complete.
+   - Marked Phase 11 exit criterion for IPv6 request-list visibility complete.
+   - Cleared Step 11.7 blocker references from snapshot/exit criteria; manual table check remains blocked only by browser-runtime availability.
+
+Verification
+1. `npm run build` (inside `frontend/`) passed.
+2. `uv run pytest tests/workflow/test_request_workflow_integration.py -q -k assigned_ipv6` passed.
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Run manual browser validation for Phase 11 verification item: confirm `/dashboard` and `/admin/requests` table rows show assigned IPv6 values from live API responses.
+2. Continue Phase 12 frontend MVP validation steps (`12.1` to `12.3`).
+
+Known bugs / regressions
+1. No regressions detected in scoped frontend build or targeted backend assigned-IPv6 workflow test.
+

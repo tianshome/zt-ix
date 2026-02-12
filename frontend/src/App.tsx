@@ -180,6 +180,10 @@ function formatDateTime(value: string | null | undefined): string {
   return parsed.toLocaleString();
 }
 
+function formatAssignedIpv6(value: string | null | undefined): string {
+  return value ?? "unassigned";
+}
+
 function statusLabel(status: RequestStatus): string {
   return status.replace(/_/g, " ");
 }
@@ -947,6 +951,7 @@ function DashboardScreen({
               <TableHead>ASN</TableHead>
               <TableHead>Network</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Assigned IPv6</TableHead>
               <TableHead>Updated</TableHead>
               <TableHead>Action</TableHead>
             </TableRow>
@@ -965,6 +970,9 @@ function DashboardScreen({
                 </TableCell>
                 <TableCell>
                   <StatusBadge status={request.status} />
+                </TableCell>
+                <TableCell>
+                  <code className="mono">{formatAssignedIpv6(request.assigned_ipv6)}</code>
                 </TableCell>
                 <TableCell>{formatDateTime(request.updated_at)}</TableCell>
                 <TableCell>
@@ -1325,6 +1333,7 @@ function AdminRequestsScreen({
               <TableHead>Network</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>User</TableHead>
+              <TableHead>Assigned IPv6</TableHead>
               <TableHead>Updated</TableHead>
               <TableHead>Action</TableHead>
             </TableRow>
@@ -1346,6 +1355,9 @@ function AdminRequestsScreen({
                 </TableCell>
                 <TableCell>
                   <code className="mono">{request.user_id}</code>
+                </TableCell>
+                <TableCell>
+                  <code className="mono">{formatAssignedIpv6(request.assigned_ipv6)}</code>
                 </TableCell>
                 <TableCell>{formatDateTime(request.updated_at)}</TableCell>
                 <TableCell>

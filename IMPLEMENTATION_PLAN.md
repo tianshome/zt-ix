@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 2.4
+Version: 2.5
 Date: 2026-02-12
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -18,9 +18,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] Phase 6 route-server desired config generation is complete (Step 6.1 to Step 6.3).
 - [x] Configurable approval mode is implemented from runtime config (`manual_admin` / `policy_auto`).
 - [x] Queue placeholder has been replaced with real async dispatch.
-- [ ] SPA frontend integration for onboarding/dashboard/request/admin flows.
-  - Blocked by: Phase 11 Step 11.7.
-  - Reason: assigned IPv6 rendering in request list tables is still open.
+- [x] SPA frontend integration for onboarding/dashboard/request/admin flows.
 - [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
 - [x] Self-hosted controller lifecycle canonical network-ID derivation is complete (Phase 8 Step 8.6).
 - [x] Phase 8 IPv6 deterministic member assignment extension is complete (Step 8.7 to Step 8.11).
@@ -430,7 +428,7 @@ Steps:
 - [x] Step 11.4: Implement admin pages (`/admin/requests`, `/admin/requests/:id`) with approve/reject/retry actions.
 - [x] Step 11.5: Use shadcn/Radix data-table primitives for admin/operator tables with MVP behavior only.
 - [x] Step 11.6: Add minimum viable empty/error states for critical screens.
-- [ ] Step 11.7: Add assigned IPv6 display to operator/admin request list tables.
+- [x] Step 11.7: Add assigned IPv6 display to operator/admin request list tables.
   - Minimum behaviors:
     - show assigned IPv6 from API/SQL-backed request association in dashboard/admin request list rows,
     - display deterministic fallback (`unassigned`) when request has no assigned IPv6 yet,
@@ -451,17 +449,15 @@ Exit criteria:
 - [x] Login/onboarding/operator/admin SPA routes are usable end-to-end with backend APIs.
 - [x] Status updates are visible via HTTP polling without manual page reloads.
 - [x] Core request/admin actions are available from SPA screens.
-- [ ] Operator/admin request list tables show assigned IPv6 when available.
-  - Blocked by: Phase 11 Step 11.7.
-  - Reason: request-list table rendering for assigned IPv6 is not implemented yet.
+- [x] Operator/admin request list tables show assigned IPv6 when available.
 
 Verification:
 - [x] `npm run build` (inside `frontend/`)
 - [x] Manual SPA walkthrough for auth -> onboarding -> request detail -> admin decision/retry.
 - [x] Manual polling check confirms status transition visibility without full page refresh.
 - [ ] Manual table check confirms operator/admin request list rows display assigned IPv6 values from API.
-  - Blocked by: Phase 11 Step 11.7 and interactive browser runtime unavailable in this execution environment.
-  - Reason: UI table update and browser interaction are both required for final validation.
+  - Blocked by: interactive browser runtime unavailable in this execution environment.
+  - Reason: browser interaction is required for final UI table validation.
 
 ## 14. Phase 12: Frontend MVP Validation and Deferred UX Scope
 Implements: final frontend quality gate for `v0.1.0`.

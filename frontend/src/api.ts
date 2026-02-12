@@ -46,6 +46,17 @@ export interface Membership {
   updated_at: string;
 }
 
+export interface Ipv6Assignment {
+  id: string;
+  join_request_id: string;
+  zt_network_id: string;
+  asn: number;
+  sequence: number;
+  assigned_ip: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface JoinRequest {
   id: string;
   user_id: string;
@@ -61,6 +72,8 @@ export interface JoinRequest {
   decided_at: string | null;
   provisioned_at: string | null;
   updated_at: string;
+  assigned_ipv6: string | null;
+  ipv6_assignment: Ipv6Assignment | null;
   membership: Membership | null;
 }
 
