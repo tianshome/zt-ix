@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, cast
 
-import os
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 ApprovalMode = Literal[
     "manual_admin",
@@ -46,6 +46,7 @@ class AppSettings:
     zt_controller_base_url: str = "http://127.0.0.1:9993/controller"
     zt_controller_auth_token: str = ""
     zt_controller_auth_token_file: str = ""
+    zt_controller_required_network_suffixes: tuple[str, ...] = ()
     zt_controller_required_network_ids: tuple[str, ...] = ()
     zt_controller_readiness_strict: bool = True
     zt_controller_backup_dir: str = "/var/backups/zt-ix-controller"
@@ -155,12 +156,24 @@ class AppSettings:
             zt_controller_base_url=str(
                 controller_cfg.get("base_url", "http://127.0.0.1:9993/controller")
             ),
-            zt_controller_auth_token=os.environ.get("ZT_CONTROLLER_AUTH_TOKEN", ""),
+            zt_controller_auth_token=os.environ.get(
+                "ZT_CONTROLLER_AUTH_TOKEN",
+                str(controller_cfg.get("auth_token", "")),
+            ),
             zt_controller_auth_token_file=str(
                 controller_cfg.get("auth_token_file", "")
             ),
+            zt_controller_required_network_suffixes=tuple(
+                str(value).strip()
+                for value in cast(
+                    list[Any], lifecycle_cfg.get("required_network_suffixes", [])
+                )
+                if str(value).strip()
+            ),
             zt_controller_required_network_ids=tuple(
-                cast(list[str], lifecycle_cfg.get("required_network_ids", []))
+                str(value).strip()
+                for value in cast(list[Any], lifecycle_cfg.get("required_network_ids", []))
+                if str(value).strip()
             ),
             zt_controller_readiness_strict=bool(
                 lifecycle_cfg.get("readiness_strict", True)

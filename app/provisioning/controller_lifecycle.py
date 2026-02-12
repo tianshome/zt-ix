@@ -29,6 +29,7 @@ REQUIRED_CONTROLLER_STATE_ARTIFACTS = (
     "identity.secret",
     "authtoken.secret",
 )
+LOWER_HEX_CHARS = frozenset("0123456789abcdef")
 LIFECYCLE_TARGET_TYPE = "controller_lifecycle"
 LIFECYCLE_TARGET_ID = "self_hosted_controller"
 
@@ -82,6 +83,15 @@ class ControllerReadinessResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ControllerRequiredNetworkDerivationResult:
+    controller_prefix: str
+    configured_full_network_ids: tuple[str, ...]
+    configured_network_suffixes: tuple[str, ...]
+    expanded_suffix_network_ids: tuple[str, ...]
+    required_network_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ControllerNetworkReconcileResult:
     existing_network_ids: tuple[str, ...]
     created_network_ids: tuple[str, ...]
@@ -114,6 +124,7 @@ class SelfHostedControllerLifecycleManager:
         *,
         base_url: str,
         auth_token: str,
+        required_network_suffixes: tuple[str, ...],
         required_network_ids: tuple[str, ...],
         backup_dir: str,
         backup_retention_count: int,
@@ -130,15 +141,17 @@ class SelfHostedControllerLifecycleManager:
         if not normalized_token:
             raise ValueError("ZT_CONTROLLER_AUTH_TOKEN is required for lifecycle operations")
 
+        normalized_suffixes = tuple(
+            suffix.strip() for suffix in required_network_suffixes if suffix.strip()
+        )
         normalized_networks = tuple(
-            network_id.strip().lower()
-            for network_id in required_network_ids
-            if network_id.strip()
+            network_id.strip() for network_id in required_network_ids if network_id.strip()
         )
 
         self._controller_base_url = normalized_base_url
         self._service_base_url = normalized_base_url.removesuffix("/controller")
         self._auth_token = normalized_token
+        self._required_network_suffixes = normalized_suffixes
         self._required_network_ids = normalized_networks
         self._backup_dir = Path(backup_dir).expanduser()
         self._backup_retention_count = max(1, int(backup_retention_count))
@@ -154,6 +167,10 @@ class SelfHostedControllerLifecycleManager:
     @property
     def required_network_ids(self) -> tuple[str, ...]:
         return self._required_network_ids
+
+    @property
+    def required_network_suffixes(self) -> tuple[str, ...]:
+        return self._required_network_suffixes
 
     @property
     def backup_retention_count(self) -> int:
@@ -211,14 +228,61 @@ class SelfHostedControllerLifecycleManager:
             controller_id=controller_id,
         )
 
-    def reconcile_required_networks(self) -> ControllerNetworkReconcileResult:
+    def derive_required_networks(
+        self,
+        *,
+        controller_id: str | None,
+    ) -> ControllerRequiredNetworkDerivationResult:
+        derivation_remediation = (
+            "set zerotier.self_hosted_controller.lifecycle.required_network_suffixes "
+            "to unique 6-char lowercase hex values"
+        )
+        controller_prefix = _derive_controller_prefix(controller_id)
+        configured_full_ids = self._normalize_required_network_ids()
+        configured_suffixes = self._normalize_required_network_suffixes(
+            remediation=derivation_remediation,
+        )
+
+        expanded_from_suffixes = tuple(
+            f"{controller_prefix}{suffix}" for suffix in configured_suffixes
+        )
+        duplicate_full_ids = sorted(
+            set(configured_full_ids).intersection(expanded_from_suffixes)
+        )
+        if duplicate_full_ids:
+            duplicates = ", ".join(duplicate_full_ids)
+            raise ControllerNetworkReconciliationError(
+                (
+                    "required network IDs are repeated across suffix and legacy full-ID "
+                    f"configuration: {duplicates}"
+                ),
+                remediation=(
+                    "remove duplicated full IDs from legacy required_network_ids when "
+                    "suffix-based configuration is enabled"
+                ),
+            )
+
+        merged_required_ids = configured_full_ids + expanded_from_suffixes
+        return ControllerRequiredNetworkDerivationResult(
+            controller_prefix=controller_prefix,
+            configured_full_network_ids=configured_full_ids,
+            configured_network_suffixes=configured_suffixes,
+            expanded_suffix_network_ids=expanded_from_suffixes,
+            required_network_ids=merged_required_ids,
+        )
+
+    def reconcile_required_networks(
+        self,
+        *,
+        required_network_ids: tuple[str, ...],
+    ) -> ControllerNetworkReconcileResult:
         reconcile_remediation = (
             "verify controller network API access and configured "
-            "ZT_CONTROLLER_REQUIRED_NETWORK_IDS"
+            "required network suffixes/full IDs"
         )
         existing: list[str] = []
         created: list[str] = []
-        for network_id in self._required_network_ids:
+        for network_id in required_network_ids:
             self._validate_network_id(network_id)
             lookup_response = self._request(
                 base_url=self._controller_base_url,
@@ -506,11 +570,42 @@ class SelfHostedControllerLifecycleManager:
         )
 
     def _validate_network_id(self, network_id: str) -> None:
-        if len(network_id) != 16 or any(ch not in "0123456789abcdef" for ch in network_id):
+        if len(network_id) != 16 or not _is_lower_hex(network_id):
             raise ControllerNetworkReconciliationError(
                 f"invalid controller network id in required set: {network_id!r}",
                 remediation="set ZT_CONTROLLER_REQUIRED_NETWORK_IDS to 16-char lowercase hex IDs",
             )
+
+    def _normalize_required_network_ids(self) -> tuple[str, ...]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw_network_id in self._required_network_ids:
+            network_id = raw_network_id.strip()
+            self._validate_network_id(network_id)
+            if network_id in seen:
+                continue
+            seen.add(network_id)
+            normalized.append(network_id)
+        return tuple(normalized)
+
+    def _normalize_required_network_suffixes(self, *, remediation: str) -> tuple[str, ...]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw_suffix in self._required_network_suffixes:
+            suffix = raw_suffix.strip()
+            if len(suffix) != 6 or not _is_lower_hex(suffix):
+                raise ControllerNetworkReconciliationError(
+                    f"invalid controller network suffix in required set: {raw_suffix!r}",
+                    remediation=remediation,
+                )
+            if suffix in seen:
+                raise ControllerNetworkReconciliationError(
+                    f"duplicate controller network suffix in required set: {suffix!r}",
+                    remediation=remediation,
+                )
+            seen.add(suffix)
+            normalized.append(suffix)
+        return tuple(normalized)
 
 
 def create_controller_lifecycle_manager(
@@ -522,6 +617,7 @@ def create_controller_lifecycle_manager(
     return SelfHostedControllerLifecycleManager(
         base_url=settings.zt_controller_base_url,
         auth_token=token,
+        required_network_suffixes=settings.zt_controller_required_network_suffixes,
         required_network_ids=settings.zt_controller_required_network_ids,
         backup_dir=settings.zt_controller_backup_dir,
         backup_retention_count=settings.zt_controller_backup_retention_count,
@@ -543,7 +639,8 @@ def run_controller_lifecycle_preflight(
     audit_repo = AuditEventRepository(db_session)
     base_metadata = {
         "trigger": trigger,
-        "required_network_ids": list(manager.required_network_ids),
+        "configured_required_network_ids": list(manager.required_network_ids),
+        "configured_required_network_suffixes": list(manager.required_network_suffixes),
     }
     if request_id is not None:
         base_metadata["request_id"] = str(request_id)
@@ -591,14 +688,17 @@ def run_controller_lifecycle_preflight(
     )
 
     try:
-        network_reconcile = manager.reconcile_required_networks()
+        network_derivation = manager.derive_required_networks(
+            controller_id=readiness.controller_id
+        )
     except ControllerLifecycleError as exc:
         _audit_lifecycle_event(
             audit_repo=audit_repo,
-            action="controller_lifecycle.network_reconciliation.failed",
+            action="controller_lifecycle.required_network_derivation.failed",
             actor_user_id=actor_user_id,
             metadata={
                 **base_metadata,
+                "controller_id": readiness.controller_id,
                 **_error_metadata(exc),
             },
         )
@@ -608,6 +708,62 @@ def run_controller_lifecycle_preflight(
             actor_user_id=actor_user_id,
             metadata={
                 **base_metadata,
+                "controller_id": readiness.controller_id,
+                **_error_metadata(exc),
+                "failed_stage": "required_network_derivation",
+            },
+        )
+        db_session.commit()
+        if strict_fail_closed:
+            raise ControllerLifecycleGateError(
+                f"controller lifecycle required-network derivation failed: {exc}",
+                remediation=exc.remediation,
+            ) from exc
+        return None
+
+    derivation_metadata = {
+        "controller_id": readiness.controller_id,
+        "controller_prefix": network_derivation.controller_prefix,
+        "required_network_ids": list(network_derivation.required_network_ids),
+        "expanded_suffix_network_ids": list(network_derivation.expanded_suffix_network_ids),
+    }
+    _audit_lifecycle_event(
+        audit_repo=audit_repo,
+        action="controller_lifecycle.required_network_derivation.succeeded",
+        actor_user_id=actor_user_id,
+        metadata={
+            **base_metadata,
+            **derivation_metadata,
+            "configured_required_network_ids": list(
+                network_derivation.configured_full_network_ids
+            ),
+            "configured_required_network_suffixes": list(
+                network_derivation.configured_network_suffixes
+            ),
+        },
+    )
+    preflight_metadata = {**base_metadata, **derivation_metadata}
+
+    try:
+        network_reconcile = manager.reconcile_required_networks(
+            required_network_ids=network_derivation.required_network_ids
+        )
+    except ControllerLifecycleError as exc:
+        _audit_lifecycle_event(
+            audit_repo=audit_repo,
+            action="controller_lifecycle.network_reconciliation.failed",
+            actor_user_id=actor_user_id,
+            metadata={
+                **preflight_metadata,
+                **_error_metadata(exc),
+            },
+        )
+        _audit_lifecycle_event(
+            audit_repo=audit_repo,
+            action="controller_lifecycle.preflight.failed",
+            actor_user_id=actor_user_id,
+            metadata={
+                **preflight_metadata,
                 **_error_metadata(exc),
                 "failed_stage": "network_reconciliation",
             },
@@ -625,7 +781,7 @@ def run_controller_lifecycle_preflight(
         action="controller_lifecycle.network_reconciliation.succeeded",
         actor_user_id=actor_user_id,
         metadata={
-            **base_metadata,
+            **preflight_metadata,
             "existing_network_ids": list(network_reconcile.existing_network_ids),
             "created_network_ids": list(network_reconcile.created_network_ids),
             "existing_count": len(network_reconcile.existing_network_ids),
@@ -636,7 +792,7 @@ def run_controller_lifecycle_preflight(
         audit_repo=audit_repo,
         action="controller_lifecycle.preflight.succeeded",
         actor_user_id=actor_user_id,
-        metadata=base_metadata,
+        metadata=preflight_metadata,
     )
     db_session.commit()
     return ControllerPreflightResult(
@@ -921,3 +1077,31 @@ def _extract_non_empty_str(payload: dict[str, Any], key: str) -> str | None:
         if stripped:
             return stripped
     return None
+
+
+def _derive_controller_prefix(controller_id: str | None) -> str:
+    if controller_id is None:
+        raise ControllerNetworkReconciliationError(
+            "controller metadata did not include a usable id for prefix derivation",
+            remediation=(
+                "verify GET /controller returns id and controller API compatibility "
+                "for this deployment"
+            ),
+        )
+    normalized_id = controller_id.strip().lower()
+    if len(normalized_id) < 10:
+        raise ControllerNetworkReconciliationError(
+            f"controller id is too short for prefix derivation: {controller_id!r}",
+            remediation="verify controller API returns a standard 10-char node id",
+        )
+    prefix = normalized_id[:10]
+    if not _is_lower_hex(prefix):
+        raise ControllerNetworkReconciliationError(
+            f"controller prefix derived from id is not lowercase hex: {prefix!r}",
+            remediation="verify controller API id format and runtime compatibility",
+        )
+    return prefix
+
+
+def _is_lower_hex(value: str) -> bool:
+    return bool(value) and all(ch in LOWER_HEX_CHARS for ch in value)

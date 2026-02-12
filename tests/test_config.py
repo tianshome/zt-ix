@@ -97,6 +97,7 @@ zerotier:
     auth_token: controller-secret
     auth_token_file: /run/secrets/zt_controller_token
     lifecycle:
+      required_network_suffixes: [abc123, 654321]
       required_network_ids: [abcdef0123456789, 0123456789abcdef]
       readiness_strict: true
       backup_dir: /var/backups/zt-ix-controller
@@ -114,6 +115,10 @@ zerotier:
     assert settings.zt_controller_base_url == "http://controller.example:9993/controller"
     assert settings.zt_controller_auth_token == "controller-secret"
     assert settings.zt_controller_auth_token_file == "/run/secrets/zt_controller_token"
+    assert settings.zt_controller_required_network_suffixes == (
+        "abc123",
+        "654321",
+    )
     assert settings.zt_controller_required_network_ids == (
         "abcdef0123456789",
         "0123456789abcdef",

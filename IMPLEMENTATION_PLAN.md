@@ -22,9 +22,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
   - Blocked by: Phase 11 Step 11.1 to Step 11.6.
   - Reason: SPA runtime foundation is complete; core workflow screens are not implemented yet.
 - [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
-- [ ] Self-hosted controller lifecycle ownership has one open ZeroTier integration gap for canonical network-ID derivation (Phase 8 Step 8.6).
-  - Blocked by: Phase 8 Step 8.6.
-  - Reason: required-network handling still expects full IDs instead of live controller prefix + configured suffix expansion.
+- [x] Self-hosted controller lifecycle canonical network-ID derivation is complete (Phase 8 Step 8.6).
 - [x] Phase 9 API realignment for SPA and approval-mode config is complete.
 
 ## 1. Planning Assumptions and Open Questions
@@ -282,7 +280,7 @@ Steps:
     - required-network reconciliation convergence/failure behavior,
     - token reload success/failure behavior,
     - backup retention and restore validation gating behavior.
-- [ ] Step 8.6: Implement canonical required-network derivation from controller API prefix + configured suffixes.
+- [x] Step 8.6: Implement canonical required-network derivation from controller API prefix + configured suffixes.
   - Minimum behaviors:
     - read controller ID from `GET /controller` and derive prefix from first 10 hex characters,
     - read `zerotier.self_hosted_controller.lifecycle.required_network_suffixes` (6-char lowercase hex),
@@ -295,10 +293,10 @@ Exit criteria:
 - [x] Startup and worker provisioning paths fail closed when self-hosted lifecycle readiness is unhealthy.
 - [x] Required controller networks reconcile before member authorization attempts run.
 - [x] Token reload control and backup/restore validation drill are auditable and test-backed.
-- [ ] Required-network configuration is suffix-only and expanded from live controller prefix without repeated full-ID literals.
+- [x] Required-network configuration is suffix-only and expanded from live controller prefix without repeated full-ID literals.
 - [ ] Release profile behavior is validated without `ZT_CENTRAL_API_TOKEN` dependency.
-  - Blocked by: Phase 8 Step 8.6 and Phase 14 Step 14.5.
-  - Reason: suffix-based canonical network-ID derivation must be implemented before staging release-gate validation.
+  - Blocked by: Phase 14 Step 14.5.
+  - Reason: staging/release-gate validation has not been executed in this environment.
 
 Verification:
 - [x] `POSTGRES_HOST_PORT=55433 docker compose up -d postgres redis zerotier-controller`
@@ -310,9 +308,7 @@ Verification:
 - [x] `DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55433/zt_ix ZT_PROVIDER=self_hosted_controller ... uv run python -m app.cli.controller_lifecycle preflight`
 - [x] `pytest tests/controller_lifecycle -q`
 - [x] `pytest tests/provisioning -q -k lifecycle`
-- [ ] `pytest tests/controller_lifecycle -q -k suffix`
-  - Blocked by: Phase 8 Step 8.6.
-  - Reason: suffix-expansion coverage does not exist yet.
+- [x] `pytest tests/controller_lifecycle -q -k suffix`
 - [ ] Manual checks:
   - controller container starts healthy with `postgres` and `redis` in the same compose run
   - readiness gate blocks provisioning while controller auth/probes fail

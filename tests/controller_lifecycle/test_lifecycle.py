@@ -21,13 +21,15 @@ from app.provisioning.controller_lifecycle import (
     run_controller_token_reload,
 )
 
+CONTROLLER_ID = "a1b2c3d4e5"
+
 
 def test_preflight_succeeds_and_writes_audit_events(db_session: Session, tmp_path: Path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/status":
             return httpx.Response(status_code=200, json={"status": "online"})
         if request.url.path == "/controller":
-            return httpx.Response(status_code=200, json={"id": "controller-1"})
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
         raise AssertionError(f"unexpected path {request.url.path}")
 
     manager = _manager(
@@ -43,11 +45,12 @@ def test_preflight_succeeds_and_writes_audit_events(db_session: Session, tmp_pat
     )
 
     assert result is not None
-    assert result.readiness.controller_id == "controller-1"
+    assert result.readiness.controller_id == CONTROLLER_ID
     assert result.network_reconcile.created_network_ids == ()
 
     actions = _audit_actions(db_session)
     assert "controller_lifecycle.readiness.succeeded" in actions
+    assert "controller_lifecycle.required_network_derivation.succeeded" in actions
     assert "controller_lifecycle.network_reconciliation.succeeded" in actions
     assert "controller_lifecycle.preflight.succeeded" in actions
 
@@ -92,7 +95,7 @@ def test_network_reconciliation_creates_missing_required_network(
         if request.url.path == "/status":
             return httpx.Response(status_code=200, json={"status": "online"})
         if request.url.path == "/controller":
-            return httpx.Response(status_code=200, json={"id": "controller-1"})
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
         if request.url.path == f"/controller/network/{existing}":
             return httpx.Response(status_code=200, json={"id": existing})
         if request.url.path == f"/controller/network/{missing}" and request.method == "GET":
@@ -129,7 +132,7 @@ def test_network_reconciliation_failure_blocks_preflight(
         if request.url.path == "/status":
             return httpx.Response(status_code=200, json={"status": "online"})
         if request.url.path == "/controller":
-            return httpx.Response(status_code=200, json={"id": "controller-1"})
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
         if request.url.path == f"/controller/network/{missing}" and request.method == "GET":
             return httpx.Response(status_code=404, json={"error": "missing"})
         if request.url.path == f"/controller/network/{missing}" and request.method == "POST":
@@ -164,7 +167,7 @@ def test_token_reload_revalidates_preflight(db_session: Session, tmp_path: Path)
         if request.url.path == "/status":
             return httpx.Response(status_code=200, json={"status": "online"})
         if request.url.path == "/controller":
-            return httpx.Response(status_code=200, json={"id": "controller-1"})
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
         if request.url.path == f"/controller/network/{required_network}":
             return httpx.Response(status_code=200, json={"id": required_network})
         raise AssertionError(f"unexpected request {request.method} {request.url.path}")
@@ -223,7 +226,7 @@ def test_backup_retention_and_restore_validation_drill(
         if request.url.path == "/status":
             return httpx.Response(status_code=200, json={"status": "online"})
         if request.url.path == "/controller":
-            return httpx.Response(status_code=200, json={"id": "controller-1"})
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
         if request.url.path == f"/controller/network/{required_network}":
             return httpx.Response(status_code=200, json={"id": required_network})
         raise AssertionError(f"unexpected request {request.method} {request.url.path}")
@@ -300,11 +303,158 @@ def test_restore_validation_failure_keeps_workflow_blocked(
     assert "controller_lifecycle.restore_validation.failed" in actions
 
 
+def test_suffix_expansion_uses_controller_prefix_for_reconciliation(
+    db_session: Session,
+    tmp_path: Path,
+) -> None:
+    suffix_existing = "123456"
+    suffix_missing = "654321"
+    existing = f"{CONTROLLER_ID}{suffix_existing}"
+    missing = f"{CONTROLLER_ID}{suffix_missing}"
+    seen: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path))
+        if request.url.path == "/status":
+            return httpx.Response(status_code=200, json={"status": "online"})
+        if request.url.path == "/controller":
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
+        if request.url.path == f"/controller/network/{existing}":
+            return httpx.Response(status_code=200, json={"id": existing})
+        if request.url.path == f"/controller/network/{missing}" and request.method == "GET":
+            return httpx.Response(status_code=404, json={"error": "missing"})
+        if request.url.path == f"/controller/network/{missing}" and request.method == "POST":
+            return httpx.Response(status_code=200, json={"id": missing})
+        raise AssertionError(f"unexpected request {request.method} {request.url.path}")
+
+    manager = _manager(
+        tmp_path=tmp_path,
+        handler=handler,
+        required_network_ids=(),
+        required_network_suffixes=(suffix_existing, suffix_missing),
+    )
+    result = run_controller_lifecycle_preflight(
+        manager=manager,
+        db_session=db_session,
+        strict_fail_closed=True,
+        trigger="test_suffix_expansion",
+    )
+
+    assert result is not None
+    assert result.network_reconcile.existing_network_ids == (existing,)
+    assert result.network_reconcile.created_network_ids == (missing,)
+    assert ("GET", f"/controller/network/{existing}") in seen
+    assert ("POST", f"/controller/network/{missing}") in seen
+
+    derivation_event = db_session.execute(
+        select(AuditEvent)
+        .where(AuditEvent.action == "controller_lifecycle.required_network_derivation.succeeded")
+        .order_by(AuditEvent.created_at.asc())
+    ).scalars().all()[-1]
+    assert derivation_event.event_metadata["controller_prefix"] == CONTROLLER_ID
+    assert derivation_event.event_metadata["required_network_ids"] == [existing, missing]
+    assert derivation_event.event_metadata["expanded_suffix_network_ids"] == [existing, missing]
+
+
+def test_suffix_derivation_rejects_malformed_suffix(
+    db_session: Session,
+    tmp_path: Path,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/status":
+            return httpx.Response(status_code=200, json={"status": "online"})
+        if request.url.path == "/controller":
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
+        raise AssertionError(f"unexpected request {request.method} {request.url.path}")
+
+    manager = _manager(
+        tmp_path=tmp_path,
+        handler=handler,
+        required_network_ids=(),
+        required_network_suffixes=("abc12z",),
+    )
+    with pytest.raises(ControllerLifecycleGateError):
+        run_controller_lifecycle_preflight(
+            manager=manager,
+            db_session=db_session,
+            strict_fail_closed=True,
+            trigger="test_suffix_malformed",
+        )
+
+    actions = _audit_actions(db_session)
+    assert "controller_lifecycle.required_network_derivation.failed" in actions
+    assert "controller_lifecycle.preflight.failed" in actions
+
+
+def test_suffix_derivation_rejects_duplicate_suffix(
+    db_session: Session,
+    tmp_path: Path,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/status":
+            return httpx.Response(status_code=200, json={"status": "online"})
+        if request.url.path == "/controller":
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
+        raise AssertionError(f"unexpected request {request.method} {request.url.path}")
+
+    manager = _manager(
+        tmp_path=tmp_path,
+        handler=handler,
+        required_network_ids=(),
+        required_network_suffixes=("123abc", "123abc"),
+    )
+    with pytest.raises(ControllerLifecycleGateError):
+        run_controller_lifecycle_preflight(
+            manager=manager,
+            db_session=db_session,
+            strict_fail_closed=True,
+            trigger="test_suffix_duplicate",
+        )
+
+    actions = _audit_actions(db_session)
+    assert "controller_lifecycle.required_network_derivation.failed" in actions
+    assert "controller_lifecycle.preflight.failed" in actions
+
+
+def test_suffix_derivation_rejects_mixed_full_id_repetition(
+    db_session: Session,
+    tmp_path: Path,
+) -> None:
+    suffix = "123abc"
+    full_network_id = f"{CONTROLLER_ID}{suffix}"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/status":
+            return httpx.Response(status_code=200, json={"status": "online"})
+        if request.url.path == "/controller":
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
+        raise AssertionError(f"unexpected request {request.method} {request.url.path}")
+
+    manager = _manager(
+        tmp_path=tmp_path,
+        handler=handler,
+        required_network_ids=(full_network_id,),
+        required_network_suffixes=(suffix,),
+    )
+    with pytest.raises(ControllerLifecycleGateError):
+        run_controller_lifecycle_preflight(
+            manager=manager,
+            db_session=db_session,
+            strict_fail_closed=True,
+            trigger="test_suffix_overlap",
+        )
+
+    actions = _audit_actions(db_session)
+    assert "controller_lifecycle.required_network_derivation.failed" in actions
+    assert "controller_lifecycle.preflight.failed" in actions
+
+
 def _manager(
     *,
     tmp_path: Path,
     handler: Callable[[httpx.Request], httpx.Response],
     required_network_ids: tuple[str, ...],
+    required_network_suffixes: tuple[str, ...] = (),
     auth_token: str = "token-controller",
     auth_token_file: str = "",
     backup_dir: str | None = None,
@@ -314,6 +464,7 @@ def _manager(
     return SelfHostedControllerLifecycleManager(
         base_url="http://127.0.0.1:9993/controller",
         auth_token=auth_token,
+        required_network_suffixes=required_network_suffixes,
         required_network_ids=required_network_ids,
         backup_dir=backup_dir or str(tmp_path / "backups"),
         backup_retention_count=backup_retention_count,

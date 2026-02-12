@@ -34,7 +34,9 @@ zerotier:
     base_url: http://127.0.0.1:9993/controller
     lifecycle:
       readiness_strict: true
-      required_network_ids: []
+      # Canonical model: configure only 6-char suffixes; backend derives full IDs
+      # from live controller prefix (first 10 chars of controller node ID).
+      required_network_suffixes: []
       backup_dir: /var/backups/zt-ix-controller
       backup_retention_count: 14
 

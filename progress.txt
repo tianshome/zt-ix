@@ -1564,3 +1564,47 @@ Next
 
 Known bugs / regressions
 1. Current Python implementation still expects full required network IDs; suffix-only behavior is documented and tracked but not implemented yet.
+
+---
+
+Update: 2026-02-12 (Phase 8 Step 8.6 canonical suffix-derived required networks implemented)
+
+Completed
+1. Implemented canonical required-network derivation in lifecycle preflight:
+   - reads controller metadata ID from `/controller`,
+   - derives controller prefix from first 10 lowercase hex characters,
+   - expands `required_network_suffixes` to full 16-char IDs before reconciliation.
+2. Added strict suffix validation and guardrails:
+   - rejects malformed suffixes,
+   - rejects duplicate suffixes,
+   - rejects mixed repetition when a suffix-expanded ID is also present in legacy full-ID config.
+3. Added lifecycle audit coverage for derivation outcomes:
+   - `controller_lifecycle.required_network_derivation.succeeded`
+   - `controller_lifecycle.required_network_derivation.failed`
+   with prefix/expanded-ID metadata.
+4. Extended runtime config loading for `required_network_suffixes` while retaining legacy `required_network_ids` compatibility input.
+5. Updated active runtime config example (`runtime-config.yaml`) to suffix-only required-network key.
+6. Added/updated automated tests for suffix derivation, validation failures, mixed repetition rejection, and config parsing.
+7. Updated `IMPLEMENTATION_PLAN.md` checklist status:
+   - Step 8.6 marked complete.
+   - Phase 8 suffix-expansion verification check marked complete.
+   - Phase 8 release-profile blocker narrowed to Phase 14 release validation only.
+
+Verification
+1. `uv run pytest tests/test_config.py -q` passed.
+2. `uv run pytest tests/controller_lifecycle/test_lifecycle.py -q` passed.
+3. `uv run pytest tests/controller_lifecycle -q` passed.
+4. `uv run pytest tests/controller_lifecycle -q -k suffix` passed.
+5. `uv run pytest tests/provisioning -q -k lifecycle` passed.
+6. `uv run ruff check app/config.py app/provisioning/controller_lifecycle.py tests/test_config.py tests/controller_lifecycle/test_lifecycle.py` passed.
+7. `uv run mypy .` passed.
+
+In progress
+1. No active implementation tasks in Step 8.6 scope.
+
+Next
+1. Execute Phase 14 staging/release validation for self-hosted profile behavior without `ZT_CENTRAL_API_TOKEN`.
+2. Continue remaining SPA/frontend phases and manual checks tracked in `IMPLEMENTATION_PLAN.md`.
+
+Known bugs / regressions
+1. No new regressions detected from Step 8.6 implementation scope.
