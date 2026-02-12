@@ -27,6 +27,8 @@ services:
 
   zerotier-controller:
     image: zerotier/zerotier:1.14.2
+    environment:
+      ZT_CONTROLLER_AUTH_TOKEN: "${ZT_CONTROLLER_AUTH_TOKEN:-replace-with-controller-token}"
     ports:
       - "127.0.0.1:9993:9993/tcp"
       - "9993:9993/udp"
@@ -62,7 +64,8 @@ services:
       ZTIX_RUNTIME_CONFIG_PATH: "${ZTIX_RUNTIME_CONFIG_PATH:-runtime-config.yaml}"
       ZT_PROVIDER: "self_hosted_controller"
       ZT_CONTROLLER_BASE_URL: "http://zerotier-controller:9993/controller"
-      ZT_CONTROLLER_AUTH_TOKEN_FILE: "/var/lib/zerotier-one/authtoken.secret"
+      ZT_CONTROLLER_AUTH_TOKEN: "${ZT_CONTROLLER_AUTH_TOKEN:-replace-with-controller-token}"
+      ZT_CONTROLLER_AUTH_TOKEN_FILE: "${ZT_CONTROLLER_AUTH_TOKEN_FILE:-}"
       ZT_CONTROLLER_REQUIRED_NETWORK_IDS: "${ZT_CONTROLLER_REQUIRED_NETWORK_IDS:-}"
       ZT_CONTROLLER_READINESS_STRICT: "${ZT_CONTROLLER_READINESS_STRICT:-true}"
       ZT_CONTROLLER_BACKUP_DIR: "${ZT_CONTROLLER_BACKUP_DIR:-/var/backups/zt-ix-controller}"

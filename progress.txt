@@ -1454,3 +1454,28 @@ Next
 
 Known bugs / regressions
 1. No new regressions detected in frontend build output for this follow-up fix.
+
+---
+
+Update: 2026-02-12 (Compose env sync: ZeroTier controller secret alignment)
+
+Completed
+1. Reviewed `docker-compose.yml` environment-variable handling for `zerotier-controller` and `api` against `.env` usage.
+2. Synchronized controller secret inputs so `.env` is authoritative for both services:
+   - added `ZT_CONTROLLER_AUTH_TOKEN` to `zerotier-controller` service env.
+   - added `ZT_CONTROLLER_AUTH_TOKEN` to `api` service env.
+   - changed `ZT_CONTROLLER_AUTH_TOKEN_FILE` in `api` from hardcoded file path to `.env`-driven value (`${ZT_CONTROLLER_AUTH_TOKEN_FILE:-}`).
+3. Preserved existing controller network wiring and volume mounts while removing the hardcoded token-file override in compose.
+
+Verification
+1. `docker compose --profile prod-like config` passed and shows synchronized `ZT_CONTROLLER_AUTH_TOKEN` wiring for both `zerotier-controller` and `api`.
+2. Verified `api` now receives `ZT_CONTROLLER_AUTH_TOKEN_FILE` from `.env` interpolation instead of a fixed compose literal.
+
+In progress
+1. No active implementation tasks in this update.
+
+Next
+1. If desired, run a runtime smoke check with the prod-like profile to confirm API preflight succeeds under your intended `.env` token mode (direct token vs token file).
+
+Known bugs / regressions
+1. No regressions identified in compose configuration rendering for this change.
