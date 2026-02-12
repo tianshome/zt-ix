@@ -1659,3 +1659,30 @@ Next
 
 Known bugs / regressions
 1. None identified from file-level changes.
+
+---
+
+Update: 2026-02-12 (Compose: Celery worker broker startup fix)
+
+Completed
+1. Updated `docker-compose.yml` `worker` command to set an explicit Celery broker:
+   - added `--broker=redis://redis:6379/0`
+2. Resolved worker startup fallback to default AMQP (`amqp://guest@127.0.0.1:5672//`) that caused connection-refused failures.
+
+Verification
+1. `docker compose config` passed and rendered the worker command with `--broker=redis://redis:6379/0`.
+2. Smoke-validated container startup with host-port override in this environment:
+   - `POSTGRES_HOST_PORT=55433 docker compose up -d redis worker`
+   - `POSTGRES_HOST_PORT=55433 docker compose logs --tail=200 worker`
+3. Worker logs confirm Redis transport and successful broker connection:
+   - `transport: redis://redis:6379/0`
+   - `Connected to redis://redis:6379/0`
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Optionally run a full async flow (`api` enqueue -> `worker` consume) in prod-like compose profile to verify end-to-end task dispatch behavior.
+
+Known bugs / regressions
+1. None identified for the worker broker startup fix.

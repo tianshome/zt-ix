@@ -92,6 +92,7 @@ services:
         "celery",
         "--app",
         "app.provisioning.tasks:celery_app",
+        "--broker=redis://redis:6379/0",
         "worker",
         "--loglevel=INFO",
       ]
