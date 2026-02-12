@@ -1537,3 +1537,30 @@ Completed
 Verification
 1. `uv run ruff check app/config.py tests/test_config.py tests/cli/test_users_cli.py` passed.
 2. `uv run pytest tests/test_config.py tests/cli/test_users_cli.py -q` passed.
+
+---
+
+Update: 2026-02-12 (Planning docs: canonical ZeroTier network ID prefix+suffix model)
+
+Completed
+1. Updated planning docs to enforce a canonical ZeroTier ID model and reduce repeated full network-ID literals:
+   - `PRD.md` v0.7
+   - `APP_FLOW.md` v0.7
+   - `BACKEND_STRUCTURE.md` v0.7
+   - `IMPLEMENTATION_PLAN.md` v2.2
+2. Documented the rule that, in self-hosted mode, Python must read controller prefix from `GET /controller` and compose full network IDs from configured 6-char suffixes.
+3. Added explicit anti-repetition guidance: runtime config should carry suffixes, not repeated full network IDs.
+4. Added/expanded the open backend integration task under Phase 8:
+   - `IMPLEMENTATION_PLAN.md` Step 8.6 is now open for controller-prefix discovery + suffix expansion + validation/audit behavior.
+5. Updated `runtime-config.example.yaml` to show suffix-only configuration key (`required_network_suffixes`).
+
+In progress
+1. No implementation code changes in this update (planning/docs only).
+
+Next
+1. Implement Phase 8 Step 8.6 in Python lifecycle logic.
+2. Add lifecycle tests for suffix parsing/composition and invalid/duplicate suffix failures.
+3. Migrate runtime config usage from full-ID lists to suffix-only keys and remove legacy repetition paths.
+
+Known bugs / regressions
+1. Current Python implementation still expects full required network IDs; suffix-only behavior is documented and tracked but not implemented yet.

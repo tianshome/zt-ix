@@ -1,6 +1,6 @@
 # Product Requirements Document (PRD)
-Version: 0.6
-Date: 2026-02-11
+Version: 0.7
+Date: 2026-02-12
 Product: ZT Internet Exchange (ZT-IX) Controller
 
 Related docs: `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
@@ -40,6 +40,10 @@ Virtual IX onboarding is often manual and inconsistent. Operators need a standar
    - frontend served by NGINX container in production,
    - NGINX reverse-proxies API traffic to FastAPI service container,
    - frontend uses fetch/XHR API calls (no backend-rendered pages).
+13. Canonical ZeroTier network ID handling in owned self-hosted mode:
+   - Python reads controller node ID prefix (first 10 hex characters) from controller API metadata at runtime.
+   - Runtime configuration stores only 6-character network suffixes.
+   - Full 16-character network IDs are composed in backend logic to avoid repeated full-ID literals and drift.
 
 ## 5. Out of Scope (Non-Goals)
 1. Full multi-vendor BGP lifecycle orchestration beyond documented BIRD route-server Option A workflow.
@@ -111,6 +115,8 @@ Acceptance criteria:
 3. Provisioning is idempotent for retries (no duplicate active membership rows).
 4. Failures persist reason, last error timestamp, and retry count.
 5. Success persists ZeroTier network/member identifiers and assigned addresses.
+6. In self-hosted mode, backend derives full network IDs from live controller prefix + configured suffixes before network reconciliation/provisioning.
+7. Config/release docs avoid repeated full network ID literals where a suffix reference is sufficient.
 
 ### F5. Admin Controls
 Acceptance criteria:
@@ -147,6 +153,7 @@ Acceptance criteria:
 3. Controller auth token lifecycle operations (rotation/reload) are auditable and have deterministic failure handling.
 4. Backup/restore workflow exists with a repeatable validation drill before provisioning resumes.
 5. Release sign-off confirms self-hosted-only operation without dependency on ZeroTier Central credentials.
+6. Required network reconciliation uses suffix-only configuration (`required_network_suffixes`) and runtime controller-prefix discovery.
 
 ## 9. Non-Functional Requirements
 1. Reliability:
@@ -188,6 +195,7 @@ Acceptance criteria:
 8. Scope decision: detailed policy-auto guardrails are out of scope for `v0.1.0`; authorization relies on existing PeeringDB/local eligibility checks in backend workflow validation.
 9. Open question: What minimum PeeringDB scope set is required in production if future API calls expand?
 10. Open question: What controller runtime topology (single-node vs HA pair) is required for `v0.1.0`?
+11. Open question: How should existing full-ID required-network config values be migrated to suffix-only form in rollout environments?
 
 ## 13. Definition of Done
 1. All in-scope features meet acceptance criteria in this PRD.

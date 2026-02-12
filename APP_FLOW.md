@@ -1,6 +1,6 @@
 # Application Flow
-Version: 0.6
-Date: 2026-02-11
+Version: 0.7
+Date: 2026-02-12
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `FRONTEND_GUIDELINES.md`, `IMPLEMENTATION_PLAN.md`
 
@@ -58,6 +58,13 @@ Allowed transitions:
 6. `failed -> approved` (admin retry path)
 
 Forbidden transitions return conflict errors and do not mutate data.
+
+## 4.1 ZeroTier ID Canonicalization
+1. `node_id` means ZeroTier node address (10 lowercase hex characters).
+2. `zt_network_id` means full ZeroTier network ID (16 lowercase hex characters).
+3. In self-hosted mode, controller-managed network IDs are derived in backend runtime as:
+   - `full_network_id = controller_prefix(10 hex from /controller) + configured_suffix(6 hex from runtime-config.yaml)`.
+4. Runtime config stores suffixes only to avoid repetitive full network ID literals and prefix drift across docs/config.
 
 ## 5. Primary Operator Authentication and Request Flow
 Trigger: user authenticates from `/login` using either PeeringDB OAuth or Auth Option A local credentials.
@@ -137,20 +144,23 @@ Trigger: API/worker startup and scheduled controller-operations jobs.
 
 Sequence:
 1. Service preflight verifies self-hosted controller API reachability and authentication.
-2. Service verifies required controller-managed network context and reconciles when missing/drifted.
-3. Decision point:
+2. Service reads controller metadata (`/controller`) and captures controller node prefix (first 10 hex characters).
+3. Service composes required full network IDs from configured suffix list (`required_network_suffixes`).
+4. Service verifies required controller-managed network context and reconciles when missing/drifted.
+5. Decision point:
    - Preflight success: provisioning queue consumption remains enabled.
    - Preflight failure: fail closed for provisioning paths and surface actionable admin diagnostics.
-4. Controller lifecycle operations (scheduled or manually triggered by runbook):
+6. Controller lifecycle operations (scheduled or manually triggered by runbook):
    - credential/token lifecycle actions,
    - backup artifact creation/retention checks,
    - restore validation drill before provisioning resume.
-5. Lifecycle actions emit audit events with actor/system metadata and outcome.
+7. Lifecycle actions emit audit events with actor/system metadata and outcome.
 
 Error branches:
 1. Controller auth/reachability failure: block provisioning and require remediation.
-2. Required controller network missing and reconciliation fails: block provisioning and surface failure context.
-3. Backup/restore validation failure: keep controller lifecycle in blocked state until validation passes.
+2. Invalid configured suffix (non-hex, wrong length, duplicate) or composed network/prefix mismatch: block provisioning and surface failure context.
+3. Required controller network missing and reconciliation fails: block provisioning and surface failure context.
+4. Backup/restore validation failure: keep controller lifecycle in blocked state until validation passes.
 
 ## 9. Provisioning Flow
 Trigger: request enters `approved`.

@@ -1,6 +1,6 @@
 # Backend Structure
-Version: 0.6
-Date: 2026-02-11
+Version: 0.7
+Date: 2026-02-12
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
 
@@ -19,6 +19,15 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
    - Auth Option A: local credentials stored in DB (`local_credential`) with `app_user` as canonical user profile.
    - Auth Option B: PeeringDB OAuth identities mapped onto canonical `app_user`.
 
+## 1.1 ZeroTier Identifier Canonical Model
+1. `node_id` = ZeroTier node address (40-bit, 10 lowercase hex characters).
+2. `zt_network_id` = full ZeroTier network ID (64-bit, 16 lowercase hex characters).
+3. `zt_network_suffix` = last 6 lowercase hex characters of the full network ID.
+4. In `self_hosted_controller` mode, backend computes required full network IDs from:
+   - controller prefix (first 10 hex characters) read live from controller API metadata (`GET /controller`), and
+   - configured suffixes from `runtime-config.yaml`.
+5. To avoid repetition/drift, runtime config must store suffixes only, not repeated full network IDs.
+
 ## 2. Core Domain Invariants
 1. Canonical application user identity is `app_user.id` (UUID).
 2. `app_user.peeringdb_user_id` is unique when present and nullable for local-only users.
@@ -30,6 +39,9 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
 7. Request state transitions must follow `APP_FLOW.md`.
 8. `zt_membership` is one-to-one with `join_request` and unique per (`zt_network_id`, `node_id`).
 9. In self-hosted mode, provisioning must fail closed when controller lifecycle preflight is unhealthy.
+10. `zt_network_id` and `node_id` values are lowercase hex only.
+11. In self-hosted mode, required managed network IDs are derived from one live controller prefix source of truth plus configured suffixes.
+12. Invalid/duplicate suffixes or prefix/suffix composition mismatches fail lifecycle preflight.
 
 ## 3. Database Schema (PostgreSQL)
 ```sql
@@ -71,7 +83,7 @@ CREATE TABLE user_asn (
 );
 
 CREATE TABLE zt_network (
-  id TEXT PRIMARY KEY CHECK (char_length(id) = 16),
+  id TEXT PRIMARY KEY CHECK (id ~ '^[0-9a-f]{16}$'),
   name TEXT NOT NULL,
   description TEXT,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -103,7 +115,7 @@ CREATE TABLE join_request (
   asn BIGINT NOT NULL,
   zt_network_id TEXT NOT NULL REFERENCES zt_network(id) ON DELETE RESTRICT,
   status request_status NOT NULL DEFAULT 'pending',
-  node_id TEXT CHECK (node_id IS NULL OR char_length(node_id) = 10),
+  node_id TEXT CHECK (node_id IS NULL OR node_id ~ '^[0-9a-f]{10}$'),
   notes TEXT,
   reject_reason TEXT,
   last_error TEXT,
@@ -118,7 +130,7 @@ CREATE TABLE zt_membership (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   join_request_id UUID NOT NULL UNIQUE REFERENCES join_request(id) ON DELETE CASCADE,
   zt_network_id TEXT NOT NULL REFERENCES zt_network(id) ON DELETE RESTRICT,
-  node_id TEXT NOT NULL CHECK (char_length(node_id) = 10),
+  node_id TEXT NOT NULL CHECK (node_id ~ '^[0-9a-f]{10}$'),
   member_id TEXT NOT NULL,
   is_authorized BOOLEAN NOT NULL DEFAULT FALSE,
   assigned_ips TEXT[] NOT NULL DEFAULT '{}',
@@ -195,13 +207,19 @@ CREATE INDEX idx_user_network_access_user_id ON user_network_access(user_id);
 
 ## 5.2 Self-Hosted Controller Lifecycle Ownership Contract (Sub-phase 5D)
 1. Startup/worker preflight must verify controller API/auth readiness before provisioning execution.
-2. Required controller-managed networks must exist (create/reconcile) before member authorization attempts.
-3. Lifecycle operations must emit audit events for success/failure:
+2. Startup/worker preflight must read controller metadata (`/controller`) and capture controller prefix (first 10 hex characters).
+3. Required controller-managed networks are expanded from configured suffix list to full IDs and must exist (create/reconcile) before member authorization attempts.
+4. Suffix validation rules:
+   - each suffix is lowercase hex and exactly 6 characters,
+   - duplicate suffixes are rejected before reconciliation,
+   - full IDs are not duplicated in configuration except temporary migration compatibility paths.
+5. Lifecycle operations must emit audit events for success/failure:
    - readiness checks,
+   - prefix read/suffix expansion outcomes,
    - credential/token lifecycle actions,
    - backup and restore validation actions.
-4. Provisioning must remain blocked while lifecycle preflight is unhealthy.
-5. Release readiness requires self-hosted-only operation without Central credentials.
+6. Provisioning must remain blocked while lifecycle preflight is unhealthy.
+7. Release readiness requires self-hosted-only operation without Central credentials.
 
 ## 5.3 Route Server Option A Contract (Sub-phase 5B)
 1. After successful member authorization, worker renders deterministic BIRD peer config from:
@@ -350,7 +368,7 @@ Current implementation:
 10. `ZT_CONTROLLER_BASE_URL` (required when `ZT_PROVIDER=self_hosted_controller`)
 11. `ZT_CONTROLLER_AUTH_TOKEN` (required when token-file source is unset)
 12. `ZT_CONTROLLER_AUTH_TOKEN_FILE` (optional runtime secret source for controller token)
-13. `ZT_CONTROLLER_REQUIRED_NETWORK_IDS` (comma-separated required network IDs for readiness/reconciliation)
+13. `ZT_CONTROLLER_REQUIRED_NETWORK_IDS` (legacy compatibility input for full 16-char IDs; planned removal after suffix-only migration)
 14. `ZT_CONTROLLER_READINESS_STRICT` (`true|false`; startup fail-closed toggle)
 15. `ZT_CONTROLLER_BACKUP_DIR` (backup artifact destination path)
 16. `ZT_CONTROLLER_BACKUP_RETENTION_COUNT` (retention policy count for lifecycle backups)
@@ -370,7 +388,11 @@ Current implementation:
 1. `workflow.approval_mode`:
    - `manual_admin` (default)
    - `policy_auto` (optional)
-2. Guardrail policy expansion for `policy_auto` is out of scope for `v0.1.0`; eligibility enforcement remains delegated to existing PeeringDB/local ASN + network authorization checks in request workflow validation.
+2. `zerotier.self_hosted_controller.lifecycle.required_network_suffixes`:
+   - list of 6-character lowercase hex suffixes,
+   - backend composes full network IDs with runtime controller prefix from `GET /controller`,
+   - repeated full network IDs in config should be avoided.
+3. Guardrail policy expansion for `policy_auto` is out of scope for `v0.1.0`; eligibility enforcement remains delegated to existing PeeringDB/local ASN + network authorization checks in request workflow validation.
 
 ## 10. Edge Cases
 1. Callback replay with used `state`: reject and audit.
@@ -385,3 +407,4 @@ Current implementation:
 10. Invalid provider mode or missing credentials: fail fast at startup with clear remediation logs.
 11. Self-hosted controller lifecycle preflight failure: block provisioning and return actionable lifecycle remediation context.
 12. Auth-related failures return JSON codes for SPA rendering and must not depend on backend redirect/error pages.
+13. Suffix-only config includes malformed suffix or duplicate suffix values: reject preflight and emit actionable lifecycle audit metadata.
