@@ -28,7 +28,7 @@ services:
   zerotier-controller:
     image: zerotier/zerotier:1.14.2
     environment:
-      ZT_CONTROLLER_AUTH_TOKEN: "${ZT_CONTROLLER_AUTH_TOKEN:-replace-with-controller-token}"
+      ZEROTIER_API_SECRET: "${ZT_CONTROLLER_AUTH_TOKEN:-replace-with-controller-token}"
     ports:
       - "127.0.0.1:9993:9993/tcp"
       - "9993:9993/udp"
