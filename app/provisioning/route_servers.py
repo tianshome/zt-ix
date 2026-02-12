@@ -451,10 +451,12 @@ def render_bird_peer_config(
         raise RouteServerConfigInputError(
             "at least one assigned IP is required to generate route-server peer config"
         )
-
-    filter_v4 = _sanitize_identifier(f"ztix_roa_guard_v4_as{asn}")
-    filter_v6 = _sanitize_identifier(f"ztix_roa_guard_v6_as{asn}")
-
+    filter_v4 = _sanitize_identifier(
+        f"ztix_roa_v4_as{asn}_{node_id}_{str(request_id)[-6:]}"
+    )
+    filter_v6 = _sanitize_identifier(
+        f"ztix_roa_v6_as{asn}_{node_id}_{str(request_id)[-6:]}"
+    )
     lines = [
         f"# Managed by zt-ix for request_id={request_id}",
         f"# ASN={asn} node_id={node_id} zt_network_id={zt_network_id}",

@@ -163,12 +163,40 @@ def deterministic_ipv6_address(
     if sequence > _MAX_IPV6_SEQUENCE:
         raise Ipv6AllocationError(f"IPv6 sequence exceeds supported range: {sequence}")
 
-    interface_identifier = (asn_prefix << 48) | (asn_suffix << 32) | sequence
+    # You said "always /64 or larger" (i.e., prefixlen <= 64).
+    if prefix.prefixlen > 64:
+        raise Ipv6AllocationError(
+            f"prefixlen must be <= 64 for hextet-based IID encoding: {prefix.prefixlen}"
+        )
+
+    def decimal_digits_as_hex_hextet(name: str, value: int) -> int:
+        if value < 0:
+            raise Ipv6AllocationError(f"{name} must be non-negative: {value}")
+        s = str(value)
+        # (Optional) enforce only decimal digits, since you said these are base-10 numbers
+        if not s.isdigit():
+            raise Ipv6AllocationError(f"{name} must be a base-10 integer: {value}")
+        v = int(s, 16)  # interpret the base-10 digits as a hex literal
+        if v > 0xFFFF:
+            raise Ipv6AllocationError(f"{name} does not fit in 16 bits after digit-as-hex mapping: {value}")
+        return v
+
+    ap = decimal_digits_as_hex_hextet("asn_prefix", asn_prefix)
+    au = decimal_digits_as_hex_hextet("asn_suffix", asn_suffix)
+    seq = decimal_digits_as_hex_hextet("sequence", sequence)
+
+    iid = (
+        (ap << 48) |
+        (au << 32) |
+        (0 << 16) |
+        (seq)
+    )
+
     host_bits = 128 - prefix.prefixlen
-    if interface_identifier >= (1 << host_bits):
+    if iid >= (1 << host_bits):
         raise Ipv6AllocationError(
             "computed deterministic interface identifier exceeds network host space"
         )
 
-    assigned = ipaddress.IPv6Address(int(prefix.network_address) + interface_identifier)
-    return f"{assigned.compressed}/128"
+    assigned = ipaddress.IPv6Address(int(prefix.network_address) + iid)
+    return f"{assigned.exploded}/128"

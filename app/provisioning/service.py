@@ -252,6 +252,7 @@ def process_join_request_provisioning_with_provider(
             provider_name=provider.provider_name,
             exc=exc,
         )
+        raise exc
 
 
 def _authorize_membership(

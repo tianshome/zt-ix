@@ -132,7 +132,6 @@ def _build_member_authorization_payload(
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {"authorized": True}
     if explicit_ip_assignments:
-        payload["noAutoAssignIps"] = True
         payload["ipAssignments"] = explicit_ip_assignments
     return payload
 

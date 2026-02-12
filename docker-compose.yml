@@ -107,6 +107,7 @@ services:
     volumes:
       - zt_ix_zerotier_controller_data:/var/lib/zerotier-one:ro
       - "${ZTIX_RUNTIME_CONFIG_HOST_PATH:-./runtime-config.yaml}:/app/runtime-config.yaml:ro"
+      - "${ZTIX_RS_SSH_PRIVATE_KEY_PATH:-/etc/zt-ix/keys/route_server_ed25519}:${ZTIX_RS_SSH_PRIVATE_KEY_PATH:-/etc/zt-ix/keys/route_server_ed25519}:ro"
 
   web:
     profiles: ["prod-like"]

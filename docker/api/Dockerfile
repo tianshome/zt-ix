@@ -1,5 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.10.2-python3.12-alpine
 
+RUN apk add --no-cache openssh-client ca-certificates
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
