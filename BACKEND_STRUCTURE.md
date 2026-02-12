@@ -1,5 +1,5 @@
 # Backend Structure
-Version: 0.7
+Version: 0.8
 Date: 2026-02-12
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
@@ -44,6 +44,8 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
 10. `zt_network_id` and `node_id` values are lowercase hex only.
 11. In self-hosted mode, required managed network IDs are derived from one live controller prefix source of truth plus configured suffixes.
 12. Invalid/duplicate suffixes or prefix/suffix composition mismatches fail lifecycle preflight.
+13. In self-hosted mode, provisioning persists one deterministic IPv6 `/128` assignment per `join_request_id` in SQL.
+14. IPv6 allocation sequence is monotonic and never reused per (`zt_network_id`, `asn`), including failed/retried requests.
 
 ## 3. Database Schema (PostgreSQL)
 ```sql
@@ -139,6 +141,29 @@ CREATE TABLE zt_membership (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (zt_network_id, node_id)
+);
+
+CREATE TABLE zt_ipv6_allocation_state (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  zt_network_id TEXT NOT NULL REFERENCES zt_network(id) ON DELETE RESTRICT,
+  asn BIGINT NOT NULL,
+  last_sequence BIGINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (zt_network_id, asn)
+);
+
+CREATE TABLE zt_ipv6_assignment (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  join_request_id UUID NOT NULL UNIQUE REFERENCES join_request(id) ON DELETE CASCADE,
+  zt_network_id TEXT NOT NULL REFERENCES zt_network(id) ON DELETE RESTRICT,
+  asn BIGINT NOT NULL,
+  sequence BIGINT NOT NULL CHECK (sequence > 0),
+  assigned_ip TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (zt_network_id, asn, sequence),
+  UNIQUE (zt_network_id, assigned_ip)
 );
 
 CREATE TABLE oauth_state_nonce (
@@ -348,6 +373,7 @@ All API responses are JSON.
 6. Automatic retries for transient network/provider failures are allowed only within one worker attempt boundary and must be bounded.
 7. In `self_hosted_controller` mode, worker enforces lifecycle readiness preflight before provider calls.
 8. If lifecycle readiness checks fail, request transitions to `failed` with actionable lifecycle error context.
+9. In `self_hosted_controller` mode, worker allocates/reuses deterministic IPv6 before provider authorization and persists assignment state even when provisioning later fails.
 
 ## 8. Storage and Secret Rules
 1. Provider secrets (Central API token or controller auth token) are never stored in plaintext DB rows.
@@ -397,7 +423,11 @@ Current implementation:
    - list of 6-character lowercase hex suffixes,
    - backend composes full network IDs with runtime controller prefix from `GET /controller`,
    - repeated full network IDs in config should be avoided.
-3. Guardrail policy expansion for `policy_auto` is out of scope for `v0.1.0`; eligibility enforcement remains delegated to existing PeeringDB/local ASN + network authorization checks in request workflow validation.
+3. `zerotier.self_hosted_controller.ipv6.prefixes_by_network_suffix`:
+   - mapping of required 6-character network suffix -> IPv6 `/64` prefix,
+   - one mapping entry per required suffix (missing/extra/invalid entries fail lifecycle preflight),
+   - deterministic allocator emits IPv6 `/128` addresses from this `/64` space.
+4. Guardrail policy expansion for `policy_auto` is out of scope for `v0.1.0`; eligibility enforcement remains delegated to existing PeeringDB/local ASN + network authorization checks in request workflow validation.
 
 ## 10. Edge Cases
 1. Callback replay with used `state`: reject and audit.

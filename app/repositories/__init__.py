@@ -6,6 +6,10 @@ from app.repositories.errors import (
     InvalidStateTransitionError,
     RepositoryError,
 )
+from app.repositories.ipv6_allocations import (
+    Ipv6AllocationError,
+    ZtIpv6AllocationRepository,
+)
 from app.repositories.join_requests import JoinRequestRepository
 from app.repositories.local_credentials import LocalCredentialRepository
 from app.repositories.memberships import ZtMembershipRepository
@@ -25,6 +29,7 @@ __all__ = [
     "InvalidStateTransitionError",
     "JoinRequestRepository",
     "LocalCredentialRepository",
+    "Ipv6AllocationError",
     "OauthStateConsumeResult",
     "OauthStateConsumeStatus",
     "OauthStateNonceRepository",
@@ -33,6 +38,7 @@ __all__ = [
     "UserAsnRepository",
     "UserNetworkAccessRepository",
     "UserRepository",
+    "ZtIpv6AllocationRepository",
     "ZtMembershipRepository",
     "ZtNetworkRepository",
 ]

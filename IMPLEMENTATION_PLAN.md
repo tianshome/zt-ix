@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 2.2
+Version: 2.3
 Date: 2026-02-12
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -23,7 +23,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
   - Reason: SPA runtime foundation is complete; core workflow screens are not implemented yet.
 - [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
 - [x] Self-hosted controller lifecycle canonical network-ID derivation is complete (Phase 8 Step 8.6).
-- [ ] Phase 8 IPv6 deterministic member assignment extension is not implemented yet (Step 8.7 to Step 8.11).
+- [ ] Phase 8 IPv6 deterministic member assignment extension is partially complete (Step 8.7 to Step 8.9 done; Step 8.10 to Step 8.11 open).
 - [x] Phase 9 API realignment for SPA and approval-mode config is complete.
 
 ## 1. Planning Assumptions and Open Questions
@@ -288,19 +288,19 @@ Steps:
     - compose full 16-char network IDs in Python (`prefix + suffix`) before reconciliation,
     - reject malformed/duplicate suffixes and reject mixed full-ID repetition in suffix-only config mode,
     - emit lifecycle audit metadata for prefix discovery + suffix expansion outcomes.
-- [ ] Step 8.7: Add per-network IPv6 prefix runtime configuration for self-hosted mode.
+- [x] Step 8.7: Add per-network IPv6 prefix runtime configuration for self-hosted mode.
   - Minimum behaviors:
     - add runtime-config schema fields for `zerotier.self_hosted_controller.ipv6.prefixes_by_network_suffix`,
     - require one IPv6 `/64` prefix per required network suffix and reject invalid/missing mappings,
     - keep ASN encoding fixed to `decimal_split_2_4` (no runtime option),
     - make IPv4 assignment disabled for this provisioning path.
-- [ ] Step 8.8: Implement deterministic ASN-scoped IPv6 allocator with never-reuse semantics.
+- [x] Step 8.8: Implement deterministic ASN-scoped IPv6 allocator with never-reuse semantics.
   - Minimum behaviors:
     - encode ASN with `decimal_split_2_4` using left-zero-padding for shorter ASNs,
     - allocate sequential suffix values per (`zt_network_id`, `asn`) during provisioning,
     - never reuse released values; allocation history remains monotonic for each (`zt_network_id`, `asn`),
     - persist the allocation sequence so retries and restarts remain deterministic.
-- [ ] Step 8.9: Persist allocation state with idempotent retry behavior.
+- [x] Step 8.9: Persist allocation state with idempotent retry behavior.
   - Minimum behaviors:
     - add DB schema/repository support for allocation rows and monotonic counters,
     - persist assigned IPv6 address in SQL with explicit `join_request_id` association for request-level lookups,
@@ -324,9 +324,9 @@ Exit criteria:
 - [x] Required controller networks reconcile before member authorization attempts run.
 - [x] Token reload control and backup/restore validation drill are auditable and test-backed.
 - [x] Required-network configuration is suffix-only and expanded from live controller prefix without repeated full-ID literals.
-- [ ] Deterministic IPv6 member assignment is provisioned per network prefix using fixed `decimal_split_2_4` ASN encoding.
-- [ ] IPv6 allocation is monotonic and never reused for a given (`zt_network_id`, `asn`) sequence space.
-- [ ] Assigned IPv6 is persisted in SQL and queryable per request for operator/admin workflow views.
+- [x] Deterministic IPv6 member assignment is provisioned per network prefix using fixed `decimal_split_2_4` ASN encoding.
+- [x] IPv6 allocation is monotonic and never reused for a given (`zt_network_id`, `asn`) sequence space.
+- [x] Assigned IPv6 is persisted in SQL and queryable per request for operator/admin workflow views.
 - [ ] Release profile behavior is validated without `ZT_CENTRAL_API_TOKEN` dependency.
   - Blocked by: Phase 14 Step 14.5.
   - Reason: staging/release-gate validation has not been executed in this environment.
@@ -342,9 +342,10 @@ Verification:
 - [x] `pytest tests/controller_lifecycle -q`
 - [x] `pytest tests/provisioning -q -k lifecycle`
 - [x] `pytest tests/controller_lifecycle -q -k suffix`
-- [ ] `pytest tests/test_config.py -q -k ipv6`
-- [ ] `pytest tests/provisioning -q -k ipv6`
-- [ ] `pytest tests/controller_lifecycle -q -k ipv6`
+- [x] `pytest tests/test_config.py -q`
+- [x] `pytest tests/provisioning/test_ipv6_allocations.py tests/provisioning/test_service.py -q`
+- [x] `pytest tests/controller_lifecycle/test_lifecycle.py -q`
+- [x] `uv run env DATABASE_URL=sqlite:////tmp/zt_ix_ipv6_alloc.db alembic upgrade head && uv run env DATABASE_URL=sqlite:////tmp/zt_ix_ipv6_alloc.db alembic downgrade base && uv run env DATABASE_URL=sqlite:////tmp/zt_ix_ipv6_alloc.db alembic upgrade head`
 - [x] Manual checks:
   - controller container starts healthy with `postgres` and `redis` in the same compose run
   - readiness gate blocks provisioning while controller auth/probes fail
@@ -432,8 +433,8 @@ Steps:
     - show assigned IPv6 from API/SQL-backed request association in dashboard/admin request list rows,
     - display deterministic fallback (`unassigned`) when request has no assigned IPv6 yet,
     - keep table behavior within existing MVP shadcn/Radix table patterns.
-  - Blocked by: Phase 8 Step 8.9 to Step 8.11.
-  - Reason: per-request IPv6 persistence and finalized API exposure must land before UI rendering can be completed and validated.
+  - Blocked by: Phase 8 Step 8.10 to Step 8.11.
+  - Reason: backend provider payload wiring and finalized IPv6-only end-to-end validation must land before UI rendering can be completed and validated.
 
 Blocked items:
 - [ ] Large-scale table optimization (virtualization, advanced sort persistence, server-driven pagination tuning).
@@ -451,16 +452,16 @@ Exit criteria:
 - [x] Status updates are visible via HTTP polling without manual page reloads.
 - [x] Core request/admin actions are available from SPA screens.
 - [ ] Operator/admin request list tables show assigned IPv6 when available.
-  - Blocked by: Phase 8 Step 8.9 to Step 8.11 and Phase 11 Step 11.7.
-  - Reason: UI exposure depends on backend IPv6 persistence + API surfacing.
+  - Blocked by: Phase 8 Step 8.10 to Step 8.11 and Phase 11 Step 11.7.
+  - Reason: UI exposure depends on finalized backend IPv6 provider payload wiring + API surfacing.
 
 Verification:
 - [x] `npm run build` (inside `frontend/`)
 - [x] Manual SPA walkthrough for auth -> onboarding -> request detail -> admin decision/retry.
 - [x] Manual polling check confirms status transition visibility without full page refresh.
 - [ ] Manual table check confirms operator/admin request list rows display assigned IPv6 values from API.
-  - Blocked by: Phase 8 Step 8.9 to Step 8.11 and interactive browser runtime unavailable in this execution environment.
-  - Reason: backend feature and browser interaction are both required for final validation.
+  - Blocked by: Phase 8 Step 8.10 to Step 8.11 and interactive browser runtime unavailable in this execution environment.
+  - Reason: finalized backend IPv6 flow and browser interaction are both required for final validation.
 
 ## 14. Phase 12: Frontend MVP Validation and Deferred UX Scope
 Implements: final frontend quality gate for `v0.1.0`.

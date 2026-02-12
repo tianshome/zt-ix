@@ -383,6 +383,10 @@ def test_suffix_expansion_uses_controller_prefix_for_reconciliation(
         handler=handler,
         required_network_ids=(),
         required_network_suffixes=(suffix_existing, suffix_missing),
+        ipv6_prefixes_by_network_suffix=(
+            (suffix_existing, "2001:db8:100::/64"),
+            (suffix_missing, "2001:db8:200::/64"),
+        ),
     )
     result = run_controller_lifecycle_preflight(
         manager=manager,
@@ -405,6 +409,102 @@ def test_suffix_expansion_uses_controller_prefix_for_reconciliation(
     assert derivation_event.event_metadata["controller_prefix"] == CONTROLLER_ID
     assert derivation_event.event_metadata["required_network_ids"] == [existing, missing]
     assert derivation_event.event_metadata["expanded_suffix_network_ids"] == [existing, missing]
+
+
+def test_suffix_derivation_rejects_missing_ipv6_prefix_mapping(
+    db_session: Session,
+    tmp_path: Path,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/status":
+            return httpx.Response(status_code=200, json={"status": "online"})
+        if request.url.path == "/controller":
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
+        raise AssertionError(f"unexpected request {request.method} {request.url.path}")
+
+    manager = _manager(
+        tmp_path=tmp_path,
+        handler=handler,
+        required_network_ids=(),
+        required_network_suffixes=("123abc",),
+        ipv6_prefixes_by_network_suffix=(),
+    )
+    with pytest.raises(ControllerLifecycleGateError):
+        run_controller_lifecycle_preflight(
+            manager=manager,
+            db_session=db_session,
+            strict_fail_closed=True,
+            trigger="test_suffix_missing_ipv6_mapping",
+        )
+
+    actions = _audit_actions(db_session)
+    assert "controller_lifecycle.required_network_derivation.failed" in actions
+    assert "controller_lifecycle.preflight.failed" in actions
+
+
+def test_suffix_derivation_rejects_non_64_ipv6_prefix_mapping(
+    db_session: Session,
+    tmp_path: Path,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/status":
+            return httpx.Response(status_code=200, json={"status": "online"})
+        if request.url.path == "/controller":
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
+        raise AssertionError(f"unexpected request {request.method} {request.url.path}")
+
+    manager = _manager(
+        tmp_path=tmp_path,
+        handler=handler,
+        required_network_ids=(),
+        required_network_suffixes=("123abc",),
+        ipv6_prefixes_by_network_suffix=(("123abc", "2001:db8:100::/56"),),
+    )
+    with pytest.raises(ControllerLifecycleGateError):
+        run_controller_lifecycle_preflight(
+            manager=manager,
+            db_session=db_session,
+            strict_fail_closed=True,
+            trigger="test_suffix_bad_ipv6_prefix",
+        )
+
+    actions = _audit_actions(db_session)
+    assert "controller_lifecycle.required_network_derivation.failed" in actions
+    assert "controller_lifecycle.preflight.failed" in actions
+
+
+def test_suffix_derivation_rejects_extra_ipv6_prefix_mapping_suffix(
+    db_session: Session,
+    tmp_path: Path,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/status":
+            return httpx.Response(status_code=200, json={"status": "online"})
+        if request.url.path == "/controller":
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
+        raise AssertionError(f"unexpected request {request.method} {request.url.path}")
+
+    manager = _manager(
+        tmp_path=tmp_path,
+        handler=handler,
+        required_network_ids=(),
+        required_network_suffixes=("123abc",),
+        ipv6_prefixes_by_network_suffix=(
+            ("123abc", "2001:db8:100::/64"),
+            ("456def", "2001:db8:200::/64"),
+        ),
+    )
+    with pytest.raises(ControllerLifecycleGateError):
+        run_controller_lifecycle_preflight(
+            manager=manager,
+            db_session=db_session,
+            strict_fail_closed=True,
+            trigger="test_suffix_extra_ipv6_mapping",
+        )
+
+    actions = _audit_actions(db_session)
+    assert "controller_lifecycle.required_network_derivation.failed" in actions
+    assert "controller_lifecycle.preflight.failed" in actions
 
 
 def test_suffix_derivation_rejects_malformed_suffix(
@@ -486,6 +586,7 @@ def test_suffix_derivation_rejects_mixed_full_id_repetition(
         handler=handler,
         required_network_ids=(full_network_id,),
         required_network_suffixes=(suffix,),
+        ipv6_prefixes_by_network_suffix=((suffix, "2001:db8:100::/64"),),
     )
     with pytest.raises(ControllerLifecycleGateError):
         run_controller_lifecycle_preflight(
@@ -506,6 +607,7 @@ def _manager(
     handler: Callable[[httpx.Request], httpx.Response],
     required_network_ids: tuple[str, ...],
     required_network_suffixes: tuple[str, ...] = (),
+    ipv6_prefixes_by_network_suffix: tuple[tuple[str, str], ...] = (),
     auth_token: str = "token-controller",
     auth_token_file: str = "",
     backup_dir: str | None = None,
@@ -516,6 +618,7 @@ def _manager(
         base_url="http://127.0.0.1:9993/controller",
         auth_token=auth_token,
         required_network_suffixes=required_network_suffixes,
+        ipv6_prefixes_by_network_suffix=ipv6_prefixes_by_network_suffix,
         required_network_ids=required_network_ids,
         backup_dir=backup_dir or str(tmp_path / "backups"),
         backup_retention_count=backup_retention_count,

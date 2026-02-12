@@ -24,6 +24,7 @@ from app.provisioning.controller_auth import (
     resolve_controller_auth_token,
 )
 from app.repositories.audit_events import AuditEventRepository
+from app.repositories.ipv6_allocations import Ipv6AllocationError, parse_ipv6_prefix
 
 HTTPClientFactory = Callable[..., httpx.Client]
 REQUIRED_CONTROLLER_STATE_ARTIFACTS = (
@@ -91,6 +92,7 @@ class ControllerRequiredNetworkDerivationResult:
     configured_full_network_ids: tuple[str, ...]
     configured_network_suffixes: tuple[str, ...]
     expanded_suffix_network_ids: tuple[str, ...]
+    expanded_suffix_ipv6_prefixes: tuple[tuple[str, str], ...]
     required_network_ids: tuple[str, ...]
 
 
@@ -103,6 +105,7 @@ class ControllerNetworkReconcileResult:
 @dataclass(frozen=True, slots=True)
 class ControllerPreflightResult:
     readiness: ControllerReadinessResult
+    network_derivation: ControllerRequiredNetworkDerivationResult
     network_reconcile: ControllerNetworkReconcileResult
 
 
@@ -127,8 +130,9 @@ class SelfHostedControllerLifecycleManager:
         *,
         base_url: str,
         auth_token: str,
-        required_network_suffixes: tuple[str, ...],
-        required_network_ids: tuple[str, ...],
+        required_network_suffixes: tuple[str, ...] = (),
+        ipv6_prefixes_by_network_suffix: tuple[tuple[str, str], ...] = (),
+        required_network_ids: tuple[str, ...] = (),
         backup_dir: str,
         backup_retention_count: int,
         controller_state_dir: str,
@@ -150,11 +154,20 @@ class SelfHostedControllerLifecycleManager:
         normalized_networks = tuple(
             network_id.strip() for network_id in required_network_ids if network_id.strip()
         )
+        normalized_ipv6_prefixes_by_suffix = tuple(
+            (
+                suffix.strip(),
+                prefix.strip(),
+            )
+            for suffix, prefix in ipv6_prefixes_by_network_suffix
+            if suffix.strip() or prefix.strip()
+        )
 
         self._controller_base_url = normalized_base_url
         self._service_base_url = normalized_base_url.removesuffix("/controller")
         self._auth_token = normalized_token
         self._required_network_suffixes = normalized_suffixes
+        self._ipv6_prefixes_by_network_suffix = normalized_ipv6_prefixes_by_suffix
         self._required_network_ids = normalized_networks
         self._backup_dir = Path(backup_dir).expanduser()
         self._backup_retention_count = max(1, int(backup_retention_count))
@@ -218,7 +231,25 @@ class SelfHostedControllerLifecycleManager:
             ),
         )
 
-        controller_id = _extract_non_empty_str(status_response.json(), "address")
+        status_payload = _parse_json_object(
+            status_response,
+            error_cls=ControllerReadinessError,
+            message_prefix="controller status probe returned invalid JSON payload",
+            remediation=readiness_remediation,
+        )
+        controller_payload = _parse_json_object(
+            controller_response,
+            error_cls=ControllerReadinessError,
+            message_prefix="controller metadata probe returned invalid JSON payload",
+            remediation=(
+                "verify controller API token has management privileges and "
+                "allowManagementFrom includes this service"
+            ),
+        )
+
+        controller_id = _extract_non_empty_str(controller_payload, "id")
+        if controller_id is None:
+            controller_id = _extract_non_empty_str(status_payload, "address")
         return ControllerReadinessResult(
             status_probe_code=status_response.status_code,
             controller_probe_code=controller_response.status_code,
@@ -239,9 +270,20 @@ class SelfHostedControllerLifecycleManager:
         configured_suffixes = self._normalize_required_network_suffixes(
             remediation=derivation_remediation,
         )
+        ipv6_prefixes_by_suffix = self._normalize_ipv6_prefixes_by_network_suffix(
+            required_network_suffixes=configured_suffixes,
+            remediation=(
+                "set zerotier.self_hosted_controller.ipv6.prefixes_by_network_suffix "
+                "to one IPv6 /64 per required network suffix"
+            ),
+        )
 
         expanded_from_suffixes = tuple(
             f"{controller_prefix}{suffix}" for suffix in configured_suffixes
+        )
+        expanded_ipv6_prefixes = tuple(
+            (f"{controller_prefix}{suffix}", ipv6_prefixes_by_suffix[suffix])
+            for suffix in configured_suffixes
         )
         duplicate_full_ids = sorted(
             set(configured_full_ids).intersection(expanded_from_suffixes)
@@ -265,6 +307,7 @@ class SelfHostedControllerLifecycleManager:
             configured_full_network_ids=configured_full_ids,
             configured_network_suffixes=configured_suffixes,
             expanded_suffix_network_ids=expanded_from_suffixes,
+            expanded_suffix_ipv6_prefixes=expanded_ipv6_prefixes,
             required_network_ids=merged_required_ids,
         )
 
@@ -604,6 +647,74 @@ class SelfHostedControllerLifecycleManager:
             normalized.append(suffix)
         return tuple(normalized)
 
+    def _normalize_ipv6_prefixes_by_network_suffix(
+        self,
+        *,
+        required_network_suffixes: tuple[str, ...],
+        remediation: str,
+    ) -> dict[str, str]:
+        normalized: dict[str, str] = {}
+        seen_prefixes: dict[str, str] = {}
+
+        for raw_suffix, raw_prefix in self._ipv6_prefixes_by_network_suffix:
+            suffix = raw_suffix.strip()
+            if len(suffix) != 6 or not _is_lower_hex(suffix):
+                raise ControllerNetworkReconciliationError(
+                    f"invalid IPv6 prefix mapping suffix: {raw_suffix!r}",
+                    remediation=remediation,
+                )
+            if suffix in normalized:
+                raise ControllerNetworkReconciliationError(
+                    f"duplicate IPv6 prefix mapping suffix: {suffix!r}",
+                    remediation=remediation,
+                )
+
+            try:
+                parsed_prefix = parse_ipv6_prefix(raw_prefix)
+            except Ipv6AllocationError as exc:
+                raise ControllerNetworkReconciliationError(
+                    f"invalid IPv6 prefix mapping for suffix {suffix!r}: {exc}",
+                    remediation=remediation,
+                ) from exc
+
+            canonical_prefix = str(parsed_prefix)
+            existing_suffix = seen_prefixes.get(canonical_prefix)
+            if existing_suffix is not None:
+                raise ControllerNetworkReconciliationError(
+                    (
+                        "duplicate IPv6 /64 prefix mapped to multiple network suffixes: "
+                        f"{existing_suffix!r}, {suffix!r}"
+                    ),
+                    remediation=remediation,
+                )
+
+            seen_prefixes[canonical_prefix] = suffix
+            normalized[suffix] = canonical_prefix
+
+        required_suffix_set = set(required_network_suffixes)
+        configured_suffix_set = set(normalized)
+        missing_suffixes = sorted(required_suffix_set - configured_suffix_set)
+        if missing_suffixes:
+            raise ControllerNetworkReconciliationError(
+                (
+                    "missing IPv6 prefix mapping for required network suffixes: "
+                    f"{', '.join(missing_suffixes)}"
+                ),
+                remediation=remediation,
+            )
+
+        extra_suffixes = sorted(configured_suffix_set - required_suffix_set)
+        if extra_suffixes:
+            raise ControllerNetworkReconciliationError(
+                (
+                    "IPv6 prefix mapping has non-required suffixes: "
+                    f"{', '.join(extra_suffixes)}"
+                ),
+                remediation=remediation,
+            )
+
+        return normalized
+
 
 def create_controller_lifecycle_manager(
     settings: AppSettings,
@@ -615,6 +726,7 @@ def create_controller_lifecycle_manager(
         base_url=settings.zt_controller_base_url,
         auth_token=token,
         required_network_suffixes=settings.zt_controller_required_network_suffixes,
+        ipv6_prefixes_by_network_suffix=settings.zt_controller_ipv6_prefixes_by_network_suffix,
         required_network_ids=settings.zt_controller_required_network_ids,
         backup_dir=settings.zt_controller_backup_dir,
         backup_retention_count=settings.zt_controller_backup_retention_count,
@@ -723,6 +835,7 @@ def run_controller_lifecycle_preflight(
         "controller_prefix": network_derivation.controller_prefix,
         "required_network_ids": list(network_derivation.required_network_ids),
         "expanded_suffix_network_ids": list(network_derivation.expanded_suffix_network_ids),
+        "ipv6_prefixes_by_network_id": dict(network_derivation.expanded_suffix_ipv6_prefixes),
     }
     _audit_lifecycle_event(
         audit_repo=audit_repo,
@@ -801,6 +914,7 @@ def run_controller_lifecycle_preflight(
     db_session.commit()
     return ControllerPreflightResult(
         readiness=readiness,
+        network_derivation=network_derivation,
         network_reconcile=network_reconcile,
     )
 

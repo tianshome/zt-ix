@@ -62,6 +62,7 @@ class AppSettings:
     zt_controller_auth_token: str = ""
     zt_controller_auth_token_file: str = ""
     zt_controller_required_network_suffixes: tuple[str, ...] = ()
+    zt_controller_ipv6_prefixes_by_network_suffix: tuple[tuple[str, str], ...] = ()
     zt_controller_required_network_ids: tuple[str, ...] = ()
     zt_controller_readiness_strict: bool = True
     zt_controller_backup_dir: str = "/var/backups/zt-ix-controller"
@@ -97,9 +98,21 @@ class AppSettings:
         controller_cfg = cast(
             dict[str, Any], zerotier_cfg.get("self_hosted_controller", {})
         )
+        controller_ipv6_cfg = cast(dict[str, Any], controller_cfg.get("ipv6", {}))
         lifecycle_cfg = cast(dict[str, Any], controller_cfg.get("lifecycle", {}))
         route_servers_cfg = cast(dict[str, Any], config.get("route_servers", {}))
         route_servers_ssh_cfg = cast(dict[str, Any], route_servers_cfg.get("ssh", {}))
+        raw_prefixes_by_network_suffix = controller_ipv6_cfg.get(
+            "prefixes_by_network_suffix", {}
+        )
+        prefixes_by_network_suffix: list[tuple[str, str]] = []
+        if isinstance(raw_prefixes_by_network_suffix, dict):
+            for raw_suffix, raw_prefix in raw_prefixes_by_network_suffix.items():
+                suffix = str(raw_suffix).strip()
+                prefix = str(raw_prefix).strip()
+                if not suffix and not prefix:
+                    continue
+                prefixes_by_network_suffix.append((suffix, prefix))
 
         app_env = str(app_cfg.get("env", "development")).lower()
         peeringdb_scopes = _normalize_peeringdb_scopes(
@@ -184,6 +197,9 @@ class AppSettings:
                     list[Any], lifecycle_cfg.get("required_network_suffixes", [])
                 )
                 if str(value).strip()
+            ),
+            zt_controller_ipv6_prefixes_by_network_suffix=tuple(
+                sorted(prefixes_by_network_suffix)
             ),
             zt_controller_required_network_ids=tuple(
                 str(value).strip()

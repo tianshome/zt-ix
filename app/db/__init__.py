@@ -10,6 +10,8 @@ from app.db.models import (
     OauthStateNonce,
     UserAsn,
     UserNetworkAccess,
+    ZtIpv6AllocationState,
+    ZtIpv6Assignment,
     ZtMembership,
     ZtNetwork,
 )
@@ -24,6 +26,8 @@ __all__ = [
     "RequestStatus",
     "UserNetworkAccess",
     "UserAsn",
+    "ZtIpv6AllocationState",
+    "ZtIpv6Assignment",
     "ZtMembership",
     "ZtNetwork",
     "can_transition_status",

@@ -13,7 +13,15 @@ from sqlalchemy.orm import Session
 
 from app.config import APPROVAL_MODE_POLICY_AUTO, AppSettings
 from app.db.enums import RequestStatus
-from app.db.models import AppUser, AuditEvent, JoinRequest, UserAsn, ZtMembership, ZtNetwork
+from app.db.models import (
+    AppUser,
+    AuditEvent,
+    JoinRequest,
+    UserAsn,
+    ZtIpv6Assignment,
+    ZtMembership,
+    ZtNetwork,
+)
 from app.dependencies import (
     SessionActor,
     get_admin_session_actor,
@@ -656,6 +664,21 @@ def _serialize_membership(row: ZtMembership | None) -> dict[str, Any] | None:
     }
 
 
+def _serialize_ipv6_assignment(row: ZtIpv6Assignment | None) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    return {
+        "id": str(row.id),
+        "join_request_id": str(row.join_request_id),
+        "zt_network_id": row.zt_network_id,
+        "asn": row.asn,
+        "sequence": row.sequence,
+        "assigned_ip": row.assigned_ip,
+        "created_at": _iso_datetime(row.created_at),
+        "updated_at": _iso_datetime(row.updated_at),
+    }
+
+
 def _serialize_join_request(request_row: JoinRequest) -> dict[str, Any]:
     return {
         "id": str(request_row.id),
@@ -672,6 +695,10 @@ def _serialize_join_request(request_row: JoinRequest) -> dict[str, Any]:
         "decided_at": _iso_datetime(request_row.decided_at),
         "provisioned_at": _iso_datetime(request_row.provisioned_at),
         "updated_at": _iso_datetime(request_row.updated_at),
+        "assigned_ipv6": request_row.ipv6_assignment.assigned_ip
+        if request_row.ipv6_assignment is not None
+        else None,
+        "ipv6_assignment": _serialize_ipv6_assignment(request_row.ipv6_assignment),
         "membership": _serialize_membership(request_row.membership),
     }
 

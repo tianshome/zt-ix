@@ -18,6 +18,7 @@ from app.db.models import (
     JoinRequest,
     OauthStateNonce,
     UserNetworkAccess,
+    ZtIpv6Assignment,
     ZtMembership,
     ZtNetwork,
 )
@@ -226,6 +227,88 @@ def test_request_api_detail_includes_membership_when_present(
     assert membership is not None
     assert membership["member_id"] == "member-xyz"
     assert membership["assigned_ips"] == ["10.0.0.5/32"]
+
+
+def test_request_apis_expose_assigned_ipv6_from_sql_assignment(
+    client: TestClient,
+    db_session: Session,
+    stub_peeringdb_client: StubPeeringDBClient,
+) -> None:
+    _seed_network(db_session)
+    _authenticate_session(
+        client=client,
+        db_session=db_session,
+        stub_peeringdb_client=stub_peeringdb_client,
+        peeringdb_user_id=1361,
+        username="operator-1361",
+        asns=(64532,),
+    )
+
+    create_response = client.post(
+        "/api/v1/requests",
+        json={"asn": 64532, "zt_network_id": "abcdef0123456789", "node_id": "abcde12345"},
+    )
+    request_id = create_response.json()["data"]["request"]["id"]
+    request_uuid = uuid.UUID(request_id)
+
+    request_row = db_session.execute(
+        select(JoinRequest).where(JoinRequest.id == request_uuid)
+    ).scalar_one()
+    db_session.add(
+        ZtIpv6Assignment(
+            join_request_id=request_row.id,
+            zt_network_id=request_row.zt_network_id,
+            asn=request_row.asn,
+            sequence=1,
+            assigned_ip="2001:db8:100:0:6:11a0:0:1/128",
+        )
+    )
+    db_session.commit()
+
+    detail_response = client.get(f"/api/v1/requests/{request_id}")
+    assert detail_response.status_code == 200
+    detail_request = detail_response.json()["data"]["request"]
+    assert detail_request["assigned_ipv6"] == "2001:db8:100:0:6:11a0:0:1/128"
+    assert detail_request["ipv6_assignment"]["assigned_ip"] == "2001:db8:100:0:6:11a0:0:1/128"
+
+    list_response = client.get("/api/v1/requests")
+    assert list_response.status_code == 200
+    listed_request = next(
+        row for row in list_response.json()["data"]["requests"] if row["id"] == request_id
+    )
+    assert listed_request["assigned_ipv6"] == "2001:db8:100:0:6:11a0:0:1/128"
+
+    db_session.add(
+        AppUser(
+            peeringdb_user_id=9061,
+            username="admin-ipv6",
+            full_name="Admin IPv6",
+            is_admin=True,
+        )
+    )
+    db_session.commit()
+    _authenticate_session(
+        client=client,
+        db_session=db_session,
+        stub_peeringdb_client=stub_peeringdb_client,
+        peeringdb_user_id=9061,
+        username="admin-ipv6",
+        asns=(64533,),
+    )
+
+    admin_list_response = client.get("/api/v1/admin/requests")
+    assert admin_list_response.status_code == 200
+    admin_row = next(
+        row for row in admin_list_response.json()["data"]["requests"] if row["id"] == request_id
+    )
+    assert admin_row["assigned_ipv6"] == "2001:db8:100:0:6:11a0:0:1/128"
+
+    admin_detail_response = client.get(f"/api/v1/admin/requests/{request_id}")
+    assert admin_detail_response.status_code == 200
+    assert (
+        admin_detail_response.json()["data"]["request"]["assigned_ipv6"]
+        == "2001:db8:100:0:6:11a0:0:1/128"
+    )
 
 
 def test_admin_queue_filters_and_approve_reject_transitions(

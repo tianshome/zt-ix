@@ -302,6 +302,11 @@ class JoinRequest(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    ipv6_assignment: Mapped[ZtIpv6Assignment | None] = relationship(
+        back_populates="join_request",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
 
 class ZtMembership(Base):
@@ -346,6 +351,77 @@ class ZtMembership(Base):
 
     join_request: Mapped[JoinRequest] = relationship(back_populates="membership")
     zt_network: Mapped[ZtNetwork] = relationship(back_populates="memberships")
+
+
+class ZtIpv6AllocationState(Base):
+    __tablename__ = "zt_ipv6_allocation_state"
+    __table_args__ = (UniqueConstraint("zt_network_id", "asn"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    zt_network_id: Mapped[str] = mapped_column(
+        String(16),
+        ForeignKey("zt_network.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    asn: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    last_sequence: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    zt_network: Mapped[ZtNetwork] = relationship()
+
+
+class ZtIpv6Assignment(Base):
+    __tablename__ = "zt_ipv6_assignment"
+    __table_args__ = (
+        CheckConstraint("sequence > 0", name="zt_ipv6_assignment_sequence_positive"),
+        UniqueConstraint("zt_network_id", "asn", "sequence"),
+        UniqueConstraint("zt_network_id", "assigned_ip"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    join_request_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("join_request.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    zt_network_id: Mapped[str] = mapped_column(
+        String(16),
+        ForeignKey("zt_network.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    asn: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    assigned_ip: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    join_request: Mapped[JoinRequest] = relationship(back_populates="ipv6_assignment")
+    zt_network: Mapped[ZtNetwork] = relationship()
 
 
 class OauthStateNonce(Base):

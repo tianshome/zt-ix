@@ -9,9 +9,21 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.enums import RequestStatus
-from app.db.models import AppUser, AuditEvent, JoinRequest, ZtMembership, ZtNetwork
+from app.db.models import (
+    AppUser,
+    AuditEvent,
+    JoinRequest,
+    ZtIpv6AllocationState,
+    ZtIpv6Assignment,
+    ZtMembership,
+    ZtNetwork,
+)
 from app.provisioning.controller_lifecycle import (
     ControllerLifecycleGateError,
+    ControllerNetworkReconcileResult,
+    ControllerPreflightResult,
+    ControllerReadinessResult,
+    ControllerRequiredNetworkDerivationResult,
     SelfHostedControllerLifecycleManager,
 )
 from app.provisioning.providers.base import ProviderAuthError, ProvisionResult
@@ -373,6 +385,139 @@ def test_lifecycle_gate_failure_sets_request_failed_without_provider_calls(
     assert failed_event.event_metadata["error_code"] == "controller_lifecycle_gate_error"
 
 
+def test_self_hosted_allocation_persists_and_overrides_provider_assigned_ips(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_row = _seed_join_request(
+        db_session,
+        status=RequestStatus.APPROVED,
+        node_id="abcde12345",
+    )
+    provider = StubProvider(
+        provider_name="self_hosted_controller",
+        authorize_result=ProvisionResult(
+            member_id="member-1",
+            is_authorized=True,
+            assigned_ips=["10.0.0.1/32"],
+            provider_name="self_hosted_controller",
+        ),
+    )
+    preflight_result = _preflight_result_for_request(
+        request_row=request_row,
+        ipv6_prefix="2001:db8:100::/64",
+    )
+    monkeypatch.setattr(
+        "app.provisioning.service.run_controller_lifecycle_preflight",
+        lambda **_: preflight_result,
+    )
+
+    process_join_request_provisioning_with_provider(
+        db_session=db_session,
+        request_id=request_row.id,
+        provider=provider,
+        controller_lifecycle_manager=cast(SelfHostedControllerLifecycleManager, object()),
+    )
+
+    assignment = db_session.execute(
+        select(ZtIpv6Assignment).where(ZtIpv6Assignment.join_request_id == request_row.id)
+    ).scalar_one()
+    assert assignment.assigned_ip.startswith("2001:db8:100:")
+    assert assignment.assigned_ip.endswith("/128")
+
+    state = db_session.execute(
+        select(ZtIpv6AllocationState).where(
+            ZtIpv6AllocationState.zt_network_id == request_row.zt_network_id,
+            ZtIpv6AllocationState.asn == request_row.asn,
+        )
+    ).scalar_one()
+    assert state.last_sequence == 1
+
+    membership = db_session.execute(
+        select(ZtMembership).where(ZtMembership.join_request_id == request_row.id)
+    ).scalar_one()
+    assert membership.assigned_ips == [assignment.assigned_ip]
+    assert membership.assigned_ips != ["10.0.0.1/32"]
+
+
+def test_self_hosted_allocation_is_stable_across_failed_retry(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_row = _seed_join_request(
+        db_session,
+        status=RequestStatus.APPROVED,
+        node_id="abcde12345",
+    )
+    provider = StubProvider(
+        provider_name="self_hosted_controller",
+        authorize_error=ProviderAuthError("token rejected", status_code=401),
+    )
+    preflight_result = _preflight_result_for_request(
+        request_row=request_row,
+        ipv6_prefix="2001:db8:200::/64",
+    )
+    monkeypatch.setattr(
+        "app.provisioning.service.run_controller_lifecycle_preflight",
+        lambda **_: preflight_result,
+    )
+
+    process_join_request_provisioning_with_provider(
+        db_session=db_session,
+        request_id=request_row.id,
+        provider=provider,
+        controller_lifecycle_manager=cast(SelfHostedControllerLifecycleManager, object()),
+    )
+
+    failed_request = db_session.get(JoinRequest, request_row.id)
+    assert failed_request is not None
+    assert failed_request.status is RequestStatus.FAILED
+
+    first_assignment = db_session.execute(
+        select(ZtIpv6Assignment).where(ZtIpv6Assignment.join_request_id == request_row.id)
+    ).scalar_one()
+    first_assigned_ip = first_assignment.assigned_ip
+    assert first_assignment.sequence == 1
+
+    JoinRequestRepository(db_session).transition_status(failed_request, RequestStatus.APPROVED)
+    db_session.commit()
+
+    provider.authorize_error = None
+    provider.authorize_result = ProvisionResult(
+        member_id="member-2",
+        is_authorized=True,
+        assigned_ips=["10.0.0.2/32"],
+        provider_name="self_hosted_controller",
+    )
+    process_join_request_provisioning_with_provider(
+        db_session=db_session,
+        request_id=request_row.id,
+        provider=provider,
+        controller_lifecycle_manager=cast(SelfHostedControllerLifecycleManager, object()),
+    )
+
+    assignment_rows = db_session.execute(
+        select(ZtIpv6Assignment).where(ZtIpv6Assignment.join_request_id == request_row.id)
+    ).scalars()
+    assignment_list = list(assignment_rows)
+    assert len(assignment_list) == 1
+    assert assignment_list[0].sequence == 1
+    assert assignment_list[0].assigned_ip == first_assigned_ip
+
+    state = db_session.execute(
+        select(ZtIpv6AllocationState).where(
+            ZtIpv6AllocationState.zt_network_id == request_row.zt_network_id,
+            ZtIpv6AllocationState.asn == request_row.asn,
+        )
+    ).scalar_one()
+    assert state.last_sequence == 1
+
+    membership = db_session.execute(
+        select(ZtMembership).where(ZtMembership.join_request_id == request_row.id)
+    ).scalar_one()
+    assert membership.assigned_ips == [first_assigned_ip]
+
+
 def test_existing_membership_row_is_upserted_without_duplication(db_session: Session) -> None:
     request_row = _seed_join_request(
         db_session,
@@ -512,6 +657,32 @@ def test_route_server_failure_retry_remains_idempotent(db_session: Session) -> N
         select(ZtMembership).where(ZtMembership.join_request_id == request_row.id)
     ).scalars()
     assert len(list(membership_rows)) == 1
+
+
+def _preflight_result_for_request(
+    *,
+    request_row: JoinRequest,
+    ipv6_prefix: str,
+) -> ControllerPreflightResult:
+    return ControllerPreflightResult(
+        readiness=ControllerReadinessResult(
+            status_probe_code=200,
+            controller_probe_code=200,
+            controller_id="a1b2c3d4e5",
+        ),
+        network_derivation=ControllerRequiredNetworkDerivationResult(
+            controller_prefix="a1b2c3d4e5",
+            configured_full_network_ids=(),
+            configured_network_suffixes=(request_row.zt_network_id[-6:],),
+            expanded_suffix_network_ids=(request_row.zt_network_id,),
+            expanded_suffix_ipv6_prefixes=((request_row.zt_network_id, ipv6_prefix),),
+            required_network_ids=(request_row.zt_network_id,),
+        ),
+        network_reconcile=ControllerNetworkReconcileResult(
+            existing_network_ids=(request_row.zt_network_id,),
+            created_network_ids=(),
+        ),
+    )
 
 
 def _seed_join_request(

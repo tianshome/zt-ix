@@ -96,6 +96,10 @@ zerotier:
     base_url: http://controller.example:9993/controller
     auth_token: controller-secret
     auth_token_file: /run/secrets/zt_controller_token
+    ipv6:
+      prefixes_by_network_suffix:
+        abc123: 2001:db8:100::/64
+        654321: 2001:db8:200::/64
     lifecycle:
       required_network_suffixes: [abc123, 654321]
       required_network_ids: [abcdef0123456789, 0123456789abcdef]
@@ -118,6 +122,10 @@ zerotier:
     assert settings.zt_controller_required_network_suffixes == (
         "abc123",
         "654321",
+    )
+    assert settings.zt_controller_ipv6_prefixes_by_network_suffix == (
+        ("654321", "2001:db8:200::/64"),
+        ("abc123", "2001:db8:100::/64"),
     )
     assert settings.zt_controller_required_network_ids == (
         "abcdef0123456789",

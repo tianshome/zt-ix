@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.config import AppSettings
 from app.db.enums import RequestStatus
+from app.db.models import JoinRequest
 from app.db.session import SessionLocal
 from app.provisioning.controller_lifecycle import (
     ControllerLifecycleError,
+    ControllerPreflightResult,
     SelfHostedControllerLifecycleManager,
     create_controller_lifecycle_manager,
     run_controller_lifecycle_preflight,
@@ -34,6 +36,7 @@ from app.provisioning.route_servers import (
 )
 from app.repositories.audit_events import AuditEventRepository
 from app.repositories.errors import InvalidStateTransitionError
+from app.repositories.ipv6_allocations import Ipv6AllocationError, ZtIpv6AllocationRepository
 from app.repositories.join_requests import JoinRequestRepository
 from app.repositories.memberships import ZtMembershipRepository
 
@@ -137,8 +140,9 @@ def process_join_request_provisioning_with_provider(
         return
 
     try:
+        preflight_result: ControllerPreflightResult | None = None
         if controller_lifecycle_manager is not None:
-            run_controller_lifecycle_preflight(
+            preflight_result = run_controller_lifecycle_preflight(
                 manager=controller_lifecycle_manager,
                 db_session=db_session,
                 strict_fail_closed=True,
@@ -146,12 +150,25 @@ def process_join_request_provisioning_with_provider(
                 actor_user_id=request_row.user_id,
                 request_id=request_row.id,
             )
+        allocated_assigned_ips: list[str] | None = None
+        if controller_lifecycle_manager is not None:
+            allocated_assigned_ips = _allocate_deterministic_ipv6(
+                db_session=db_session,
+                request_row=request_row,
+                preflight_result=preflight_result,
+            )
+            db_session.commit()
         provision_result = _authorize_membership(
             provider=provider,
             request_id=request_row.id,
             asn=request_row.asn,
             zt_network_id=request_row.zt_network_id,
             node_id=request_row.node_id,
+        )
+        assigned_ips = (
+            allocated_assigned_ips
+            if allocated_assigned_ips is not None
+            else provision_result.assigned_ips
         )
         if request_row.node_id is None:
             raise ProvisioningInputError("node_id is required before provisioning can run")
@@ -162,7 +179,7 @@ def process_join_request_provisioning_with_provider(
             node_id=request_row.node_id,
             member_id=provision_result.member_id,
             is_authorized=provision_result.is_authorized,
-            assigned_ips=provision_result.assigned_ips,
+            assigned_ips=assigned_ips,
         )
         route_server_results: list[RouteServerSyncResult] = []
         if route_server_sync_service is not None:
@@ -171,7 +188,7 @@ def process_join_request_provisioning_with_provider(
                 asn=request_row.asn,
                 zt_network_id=request_row.zt_network_id,
                 node_id=request_row.node_id,
-                assigned_ips=provision_result.assigned_ips,
+                assigned_ips=assigned_ips,
             )
             if route_server_results:
                 audit_repo.create_event(
@@ -214,7 +231,7 @@ def process_join_request_provisioning_with_provider(
             metadata={
                 "provider_name": provision_result.provider_name,
                 "member_id": provision_result.member_id,
-                "assigned_ips": provision_result.assigned_ips,
+                "assigned_ips": assigned_ips,
                 "route_server_count": len(route_server_results),
                 "completed_at": datetime.now(UTC).isoformat(),
             },
@@ -224,6 +241,7 @@ def process_join_request_provisioning_with_provider(
         ControllerLifecycleError,
         ProvisioningProviderError,
         ProvisioningInputError,
+        Ipv6AllocationError,
         RouteServerSyncError,
         IntegrityError,
     ) as exc:
@@ -257,6 +275,34 @@ def _authorize_membership(
         asn=asn,
         request_id=request_id,
     )
+
+
+def _allocate_deterministic_ipv6(
+    *,
+    db_session: Session,
+    request_row: JoinRequest,
+    preflight_result: ControllerPreflightResult | None,
+) -> list[str]:
+    if preflight_result is None:
+        raise ProvisioningInputError(
+            "controller lifecycle preflight result is missing for deterministic IPv6 allocation"
+        )
+
+    prefixes_by_network_id = dict(preflight_result.network_derivation.expanded_suffix_ipv6_prefixes)
+    network_prefix = prefixes_by_network_id.get(request_row.zt_network_id)
+    if network_prefix is None:
+        raise ProvisioningInputError(
+            "missing deterministic IPv6 prefix for target network "
+            f"zt_network_id={request_row.zt_network_id}"
+        )
+
+    assignment = ZtIpv6AllocationRepository(db_session).get_or_allocate_for_request(
+        join_request_id=request_row.id,
+        zt_network_id=request_row.zt_network_id,
+        asn=request_row.asn,
+        network_prefix=network_prefix,
+    )
+    return [assignment.assigned_ip]
 
 
 def _mark_failed(
@@ -375,6 +421,8 @@ def _exception_error_code(exc: Exception) -> str:
     if isinstance(exc, ProvisioningProviderError):
         return exc.error_code
     if isinstance(exc, ProvisioningInputError):
+        return exc.error_code
+    if isinstance(exc, Ipv6AllocationError):
         return exc.error_code
     if isinstance(exc, RouteServerSyncError):
         return exc.error_code

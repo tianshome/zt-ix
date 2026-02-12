@@ -1801,3 +1801,59 @@ Next
 
 Known bugs / regressions
 1. None identified for this documentation-only addendum.
+
+---
+
+Update: 2026-02-12 (Phase 8 Step 8.7 to Step 8.9 implemented: IPv6 config + deterministic allocator + SQL persistence)
+
+Completed
+1. Implemented Phase 8 Step 8.7 runtime configuration support for deterministic IPv6 in self-hosted mode:
+   - Added YAML settings parsing for `zerotier.self_hosted_controller.ipv6.prefixes_by_network_suffix` in `app/config.py`.
+   - Added lifecycle/preflight validation in `app/provisioning/controller_lifecycle.py` requiring one valid IPv6 `/64` per required network suffix.
+   - Added failure guards for malformed suffix keys, duplicate suffix keys, duplicate `/64` reuse, missing required mappings, and non-required extra mappings.
+2. Implemented Phase 8 Step 8.8 deterministic allocator with never-reuse semantics:
+   - Added `app/repositories/ipv6_allocations.py` with:
+     - fixed ASN encoding `decimal_split_2_4` (`left-zero-pad to 6 digits`, split `2 + 4`),
+     - deterministic IPv6 `/128` rendering from configured `/64` prefixes,
+     - monotonic per-(`zt_network_id`, `asn`) sequence advancement,
+     - idempotent per-request reuse behavior.
+3. Implemented Phase 8 Step 8.9 SQL persistence and idempotent retry behavior:
+   - Added ORM models in `app/db/models.py`:
+     - `zt_ipv6_allocation_state`
+     - `zt_ipv6_assignment` (explicit `join_request_id` association)
+   - Added Alembic migration `20260212_0004_ipv6_allocation_persistence.py`.
+   - Wired provisioning path in `app/provisioning/service.py` to:
+     - run deterministic IPv6 allocation in self-hosted mode,
+     - persist/reuse allocation before provider authorization,
+     - keep assignment stable across failed/retried runs,
+     - persist effective IPv6 assignment in membership `assigned_ips` for request-level surfaces.
+4. Exposed persisted request-level IPv6 data for workflow consumers:
+   - Added `assigned_ipv6` and `ipv6_assignment` fields in workflow API serialization (`app/routes/workflow.py`).
+   - Added integration coverage asserting operator/admin APIs surface SQL-backed IPv6 assignment.
+5. Updated configuration/docs/tracking:
+   - Updated `runtime-config.example.yaml` and `runtime-config.yaml` with `ipv6.prefixes_by_network_suffix` examples.
+   - Updated `BACKEND_STRUCTURE.md` and `APP_FLOW.md` for deterministic IPv6 allocation/persistence behavior.
+   - Updated `IMPLEMENTATION_PLAN.md` checklist state:
+     - Step 8.7, Step 8.8, Step 8.9 marked complete.
+     - Phase 8 snapshot/blockers updated to show Step 8.10 to Step 8.11 remaining.
+
+Verification
+1. `uv run ruff check .` passed.
+2. `uv run mypy .` passed.
+3. `uv run pytest -q` passed.
+4. `uv run pytest tests/test_config.py -q` passed.
+5. `uv run pytest tests/controller_lifecycle -q` passed.
+6. `uv run pytest tests/provisioning -q` passed.
+7. `uv run pytest tests/workflow/test_request_workflow_integration.py -q` passed.
+8. `uv run env DATABASE_URL=sqlite:////tmp/zt_ix_ipv6_alloc.db alembic upgrade head && uv run env DATABASE_URL=sqlite:////tmp/zt_ix_ipv6_alloc.db alembic downgrade base && uv run env DATABASE_URL=sqlite:////tmp/zt_ix_ipv6_alloc.db alembic upgrade head` passed.
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Implement Phase 8 Step 8.10: provider payload wiring (`ipAssignments`, `noAutoAssignIps`) and lifecycle network config reconciliation for IPv6-only member assignment enforcement.
+2. Implement Phase 8 Step 8.11: focused automated/manual validation for end-to-end IPv6-only provisioning.
+3. Execute Phase 11 Step 11.7 UI table updates once Step 8.10 to Step 8.11 backend flow finalization is complete.
+
+Known bugs / regressions
+1. No regressions detected in lint, typecheck, migration lifecycle, or automated tests for this scope.
