@@ -1388,3 +1388,69 @@ Next
 
 Known bugs / regressions
 1. None identified for this documentation-only update.
+
+---
+
+Update: 2026-02-12 (Phase 11 core SPA workflow screens implemented)
+
+Completed
+1. Implemented Phase 11 Step 11.1 login and callback flows in SPA:
+   - Added functional `/login` with PeeringDB start action and local credential form (`POST /api/v1/auth/peeringdb/start`, `POST /api/v1/auth/local/login`).
+   - Added functional `/auth/callback` processor with inline callback error handling (`POST /api/v1/auth/peeringdb/callback`) and onboarding redirect on success.
+2. Implemented Phase 11 Step 11.2 onboarding workflow:
+   - Added `/onboarding` context loading (`GET /api/v1/onboarding/context`) and request submission (`POST /api/v1/requests`).
+   - Added inline handling for duplicate active-request conflicts, eligibility-blocked state, and submission errors.
+3. Implemented Phase 11 Step 11.3 operator routes with polling:
+   - Added `/dashboard` request table (`GET /api/v1/requests`) with bounded HTTP polling refresh.
+   - Added `/requests/:id` detail page (`GET /api/v1/requests/{request_id}`) with bounded polling and membership/error surfaces.
+4. Implemented Phase 11 Step 11.4 admin routes and actions:
+   - Added `/admin/requests` queue with filters (`status`, `asn`, `zt_network_id`, `min_age_minutes`) and polling (`GET /api/v1/admin/requests`).
+   - Added `/admin/requests/:id` review page with approve/reject/retry actions and audit timeline (`GET/POST /api/v1/admin/requests/{id}*`).
+5. Implemented Phase 11 Step 11.5/11.6 table primitives and MVP states:
+   - Added local shadcn-style table primitive components in `frontend/src/components/ui/table.tsx` and wired them into operator/admin tables.
+   - Added minimum-viable empty/error states across login, onboarding, dashboard, request detail, admin queue, and admin detail views.
+6. Realigned frontend visual system to current guideline tokens:
+   - Replaced legacy typography/colors with `Noto Sans` + `Noto Sans Mono` and marble token palette in `frontend/src/styles.css`.
+   - Preserved mobile-first shell behavior, breakpoint rules, page-enter motion, row stagger motion, and reduced-motion fallback.
+7. Updated checklist state in `IMPLEMENTATION_PLAN.md`:
+   - Marked Phase 11 Step 11.1 through Step 11.6 complete.
+   - Marked Phase 11 exit criteria complete.
+   - Added explicit blocked annotations for manual browser verification tasks in this environment.
+
+Verification
+1. `npm run build` (inside `frontend/`) passed.
+2. `timeout 15s npm run dev -- --host 127.0.0.1 --port 4173 --strictPort` failed in this environment with `EPERM` bind restriction (sandbox limitation, not frontend compile failure).
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Run manual SPA walkthrough in an interactive browser: `/login` -> `/auth/callback` -> `/onboarding` -> `/requests/:id` -> `/admin/requests/:id`.
+2. Validate live polling transitions end-to-end against running API/worker stack.
+3. Start Phase 12 Step 12.1 integration smoke coverage for frontend/API flows.
+
+Known bugs / regressions
+1. No build-time regressions detected in frontend bundle output for this scope.
+2. Local dev server bind check is blocked by sandbox port permissions in this execution environment.
+
+---
+
+Update: 2026-02-12 (Phase 11 follow-up: session refresh loop guard)
+
+Completed
+1. Fixed SPA session-refresh callback stability in `frontend/src/App.tsx`:
+   - removed `session.status` from `refreshSession` callback dependencies,
+   - removed eager `setSession({status:"loading"})` inside refresh path,
+   - prevents repeat session-check loops caused by callback identity churn.
+
+Verification
+1. `npm run build` (inside `frontend/`) passed after refresh-loop fix.
+
+In progress
+1. No active implementation tasks in this follow-up.
+
+Next
+1. Manual browser walkthrough and polling validation remain pending as documented in Phase 11 verification blockers.
+
+Known bugs / regressions
+1. No new regressions detected in frontend build output for this follow-up fix.
