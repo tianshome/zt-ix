@@ -338,6 +338,9 @@ Steps:
 - [x] Step 9.6: Add/adjust automated tests for JSON auth callbacks, onboarding context, admin list/detail APIs, and approval-mode behavior.
 - [x] Step 9.7: Remove legacy redirect-style auth routes and compatibility behavior and clean up FastAPI-related modules.
 - [x] Step 9.8: Load `AppSettings` runtime values from `runtime-config.yaml` instead of environment-variable lookups in `app/config.py`.
+- [x] Step 9.9: Reintroduce deployment runtime wiring overrides in `get_settings()`/`from_env()`:
+  - honor `ZTIX_RUNTIME_CONFIG_PATH` for runtime-config file selection,
+  - apply environment overrides for deployment wiring (including `ZT_CONTROLLER_BASE_URL`) so API and Celery worker resolve consistent provider endpoints.
 
 Exit criteria:
 - [x] SPA-required auth/workflow/admin APIs exist and are test-covered.
@@ -350,6 +353,7 @@ Verification:
 - [x] `pytest tests/workflow -q`
 - [x] Approval-mode tests cover `manual_admin` and `policy_auto` outcomes.
 - [x] `pytest tests/test_config.py -q`
+- [x] Config regression test covers `ZTIX_RUNTIME_CONFIG_PATH` + `ZT_CONTROLLER_BASE_URL` override behavior in cached `get_settings()`.
 
 ## 12. Phase 10: SPA Platform and Delivery Topology
 Implements: PRD SPA runtime scope and frontend stack requirements.

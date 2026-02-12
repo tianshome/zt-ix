@@ -1736,3 +1736,28 @@ Verification
 
 Known bugs / regressions
 1. Existing historical migration downgrade path issue (pre-existing to this change): full `head -> base` downgrade on PostgreSQL fails in `20260210_0002` downgrade when attempting to restore `app_user.peeringdb_user_id` to `NOT NULL` while null-valued rows exist.
+
+---
+
+Update: 2026-02-12 (Config: worker controller base URL env override fix)
+
+Completed
+1. Fixed runtime settings loading so `get_settings()` now resolves `ZTIX_RUNTIME_CONFIG_PATH` and applies environment overrides for deployment/runtime wiring values.
+2. Added explicit env override support for `ZT_CONTROLLER_BASE_URL` (plus related runtime wiring keys) so Celery workers do not fall back to YAML localhost defaults inside containers.
+3. Updated `AppSettings.from_env(...)` to apply the same runtime-path resolution and environment override behavior.
+4. Added regression coverage in `tests/test_config.py` to ensure cached `get_settings()` honors `ZTIX_RUNTIME_CONFIG_PATH` and `ZT_CONTROLLER_BASE_URL` overrides.
+
+Verification
+1. `uv run ruff check app/config.py tests/test_config.py` passed.
+2. `uv run pytest tests/test_config.py -q` passed.
+3. `uv run pytest tests/provisioning/test_tasks.py -q` passed.
+4. `uv run mypy app/config.py tests/test_config.py` passed.
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Optional: run a compose smoke flow (`api` approve/retry -> `worker` consume) to confirm container-to-controller routing uses `http://zerotier-controller:9993/controller` end to end.
+
+Known bugs / regressions
+1. None identified in this scoped fix.

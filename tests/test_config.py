@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.config import AppSettings
+from app.config import AppSettings, get_settings
 
 
 def _write_runtime_config(tmp_path: Path, content: str) -> Path:
@@ -170,3 +170,31 @@ def test_from_env_alias_uses_yaml_path(tmp_path: Path) -> None:
     settings = AppSettings.from_env(str(runtime_config))
 
     assert settings.workflow_approval_mode == "policy_auto"
+
+
+def test_get_settings_applies_controller_base_url_env_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime_config = _write_runtime_config(
+        tmp_path,
+        """
+zerotier:
+  provider: self_hosted_controller
+  self_hosted_controller:
+    base_url: http://127.0.0.1:9993/controller
+""",
+    )
+    monkeypatch.setenv("ZTIX_RUNTIME_CONFIG_PATH", str(runtime_config))
+    monkeypatch.setenv(
+        "ZT_CONTROLLER_BASE_URL",
+        "http://zerotier-controller:9993/controller",
+    )
+    get_settings.cache_clear()
+    try:
+        settings = get_settings()
+    finally:
+        get_settings.cache_clear()
+
+    assert settings.runtime_config_path == str(runtime_config)
+    assert settings.zt_controller_base_url == "http://zerotier-controller:9993/controller"

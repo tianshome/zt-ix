@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -16,6 +16,21 @@ ApprovalMode = Literal[
 ]
 APPROVAL_MODE_MANUAL_ADMIN: ApprovalMode = "manual_admin"
 APPROVAL_MODE_POLICY_AUTO: ApprovalMode = "policy_auto"
+
+_ENV_STRING_OVERRIDES: tuple[tuple[str, str], ...] = (
+    ("APP_ENV", "app_env"),
+    ("APP_SECRET_KEY", "app_secret_key"),
+    ("PEERINGDB_CLIENT_ID", "peeringdb_client_id"),
+    ("PEERINGDB_CLIENT_SECRET", "peeringdb_client_secret"),
+    ("PEERINGDB_REDIRECT_URI", "peeringdb_redirect_uri"),
+    ("REDIS_URL", "redis_url"),
+    ("ZT_PROVIDER", "zt_provider"),
+    ("ZT_CENTRAL_BASE_URL", "zt_central_base_url"),
+    ("ZT_CENTRAL_API_TOKEN", "zt_central_api_token"),
+    ("ZT_CONTROLLER_BASE_URL", "zt_controller_base_url"),
+    ("ZT_CONTROLLER_AUTH_TOKEN", "zt_controller_auth_token"),
+    ("ZT_CONTROLLER_AUTH_TOKEN_FILE", "zt_controller_auth_token_file"),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,7 +231,37 @@ class AppSettings:
 
     @classmethod
     def from_env(cls, runtime_config_path: str = "runtime-config.yaml") -> AppSettings:
-        return cls.from_yaml(runtime_config_path=runtime_config_path)
+        resolved_runtime_config_path = _resolve_runtime_config_path(runtime_config_path)
+        return _apply_environment_overrides(
+            cls.from_yaml(runtime_config_path=resolved_runtime_config_path)
+        )
+
+
+def _resolve_runtime_config_path(default_path: str = "runtime-config.yaml") -> str:
+    configured_path = os.environ.get("ZTIX_RUNTIME_CONFIG_PATH")
+    if configured_path is None:
+        return default_path
+    normalized_path = configured_path.strip()
+    return normalized_path or default_path
+
+
+def _apply_environment_overrides(settings: AppSettings) -> AppSettings:
+    overrides: dict[str, Any] = {}
+    for env_name, field_name in _ENV_STRING_OVERRIDES:
+        env_value = os.environ.get(env_name)
+        if env_value is None:
+            continue
+        overrides[field_name] = env_value
+
+    if not overrides:
+        return settings
+
+    if "app_env" in overrides:
+        overrides["app_env"] = str(overrides["app_env"]).lower()
+    if "zt_provider" in overrides:
+        overrides["zt_provider"] = str(overrides["zt_provider"]).lower()
+
+    return replace(settings, **overrides)
 
 
 def _load_runtime_config(runtime_config_path: str) -> dict[str, Any]:
@@ -267,4 +312,4 @@ def _resolve_workflow_approval_mode(config: dict[str, Any]) -> ApprovalMode:
 
 @lru_cache(maxsize=1)
 def get_settings() -> AppSettings:
-    return AppSettings.from_yaml()
+    return AppSettings.from_env()
