@@ -787,7 +787,7 @@ function OnboardingScreen({
           </select>
         </label>
         <label>
-          Node ID (optional)
+          Node ID (your ZeroTier client)
           <input
             value={nodeIdValue}
             onChange={(event) => setNodeIdValue(event.currentTarget.value)}
