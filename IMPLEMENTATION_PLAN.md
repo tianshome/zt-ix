@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 1.9
+Version: 2.1
 Date: 2026-02-12
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -9,7 +9,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - `[ ]` open and not yet implemented.
 - `[ ]` + `Blocked by` + `Reason` marks an explicitly blocked gap that must be revisited when the dependency is complete.
 
-## 0.1 Current Status Snapshot (through Phase 9 implementation)
+## 0.1 Current Status Snapshot (through Phase 10 implementation)
 - [x] Phase 1 bootstrap is complete.
 - [x] Phase 2 data/migration foundation is complete.
 - [x] Phase 3 auth integration (Auth Option A + Auth Option B) is complete for automated coverage.
@@ -19,8 +19,8 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] Configurable approval mode is implemented from runtime config (`manual_admin` / `policy_auto`).
 - [x] Queue placeholder has been replaced with real async dispatch.
 - [ ] SPA frontend integration for onboarding/dashboard/request/admin flows.
-  - Blocked by: Phase 10 Step 10.1 to Step 10.5 and Phase 11 Step 11.1 to Step 11.6.
-  - Reason: SPA runtime foundation and core workflow screens are not implemented yet.
+  - Blocked by: Phase 11 Step 11.1 to Step 11.6.
+  - Reason: SPA runtime foundation is complete; core workflow screens are not implemented yet.
 - [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
 - [x] Self-hosted controller lifecycle ownership is implemented for planned scope (Phase 8 Step 8.1 to Step 8.5).
 - [x] Phase 9 API realignment for SPA and approval-mode config is complete.
@@ -153,8 +153,8 @@ Steps:
 - [x] Queueing placeholder retained for defer-to-phase-5 behavior (`_enqueue_provisioning_attempt`).
 - [x] Replace queueing placeholder with real Celery task dispatch.
 - [ ] Integrate React/TypeScript/shadcn-ui frontend workflow pages for operator/admin routes.
-  - Blocked by: Phase 10 Step 10.1 to Step 10.5 and Phase 11 Step 11.1 to Step 11.6.
-  - Reason: SPA runtime foundation and workflow UI implementation are intentionally deferred to dedicated frontend phases.
+  - Blocked by: Phase 11 Step 11.1 to Step 11.6.
+  - Reason: SPA runtime foundation is complete; workflow UI implementation remains in the dedicated screen phase.
 
 Exit criteria:
 - [x] Operator can submit request and track state via API responses.
@@ -162,8 +162,8 @@ Exit criteria:
 - [x] Approval mode is configurable (`manual_admin` default, `policy_auto` optional) with auditable decision outcomes.
 - [x] Admin approval/retry triggers async provisioning dispatch.
 - [ ] Operator/admin rendered UI pages match frontend guidelines.
-  - Blocked by: Phase 10 Step 10.1 to Step 10.5 and Phase 11 Step 11.1 to Step 11.6.
-  - Reason: SPA frontend layer is not implemented yet.
+  - Blocked by: Phase 11 Step 11.1 to Step 11.6.
+  - Reason: SPA platform exists, but workflow screens are not implemented yet.
 
 Verification:
 - [x] `pytest tests/workflow -q`
@@ -344,21 +344,21 @@ Implements: PRD SPA runtime scope and frontend stack requirements.
 Goal: establish SPA build/runtime foundation after backend API realignment is complete.
 
 Steps:
-- [ ] Step 10.1: Bootstrap frontend workspace (`frontend/`) using pinned React/TypeScript/Vite/npm versions from `TECH_STACK.md`.
-- [ ] Step 10.2: Implement client-side router and shared app shell for `/`, `/login`, `/auth/callback`, `/onboarding`, `/dashboard`, `/requests/:id`, `/admin/requests`, `/admin/requests/:id`.
-- [ ] Step 10.3: Add production NGINX web container assets/config for SPA static serving and `/api/*` reverse proxy to FastAPI service container.
-- [ ] Step 10.4: Update `docker-compose.yml` for production-like profile with separate `web` and `api` services.
-- [ ] Step 10.5: Add Vite dev proxy config and local SPA run instructions (`vite serve` -> `localhost:8000` API proxy).
+- [x] Step 10.1: Bootstrap frontend workspace (`frontend/`) using pinned React/TypeScript/Vite/npm versions from `TECH_STACK.md`.
+- [x] Step 10.2: Implement client-side router and shared app shell for `/`, `/login`, `/auth/callback`, `/onboarding`, `/dashboard`, `/requests/:id`, `/admin/requests`, `/admin/requests/:id`.
+- [x] Step 10.3: Add production NGINX web container assets/config for SPA static serving and `/api/*` reverse proxy to FastAPI service container.
+- [x] Step 10.4: Update `docker-compose.yml` for production-like profile with separate `web` and `api` services.
+- [x] Step 10.5: Add Vite dev proxy config and local SPA run instructions (`vite serve` -> `localhost:8000` API proxy).
 
 Exit criteria:
-- [ ] SPA router owns browser routes.
-- [ ] Production compose profile documents NGINX web container + API container topology.
-- [ ] Local development can run SPA via Vite proxy without backend template routes.
+- [x] SPA router owns browser routes.
+- [x] Production compose profile documents NGINX web container + API container topology.
+- [x] Local development can run SPA via Vite proxy without backend template routes.
 
 Verification:
-- [ ] `npm ci` (inside `frontend/`)
-- [ ] `npm run build` (inside `frontend/`)
-- [ ] `docker compose config` shows `web` -> `api` topology wiring.
+- [x] `npm ci` (inside `frontend/`)
+- [x] `npm run build` (inside `frontend/`)
+- [x] `docker compose --profile prod-like config` shows `web` -> `api` topology wiring.
 
 ## 13. Phase 11: Core SPA Workflow Screens (MVP)
 Implements: PRD operator/admin UI scope for `v0.1.0`.

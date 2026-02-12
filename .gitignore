@@ -17,4 +17,7 @@ wheels/
 .pytest_cache/
 .ruff_cache/
 
+# Frontend-generated files
+node_modules/
+
 /runtime-config.yaml

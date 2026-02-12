@@ -1280,3 +1280,78 @@ Next
 
 Known bugs / regressions
 1. None detected in automated lint/type/test coverage for this scope.
+
+---
+
+Update: 2026-02-12 (Phase 10 SPA platform + delivery topology implemented)
+
+Completed
+1. Implemented Phase 10 Step 10.1 frontend workspace bootstrap:
+   - Added `frontend/` with pinned React/React DOM (`19.2.4`), TypeScript (`5.9.3`), Vite (`7.3.1`), and npm package-manager metadata (`11.10.0`).
+   - Added base Vite/TypeScript entry files (`index.html`, `vite.config.ts`, `tsconfig.json`, `src/main.tsx`).
+2. Implemented Phase 10 Step 10.2 client-side router + shared app shell:
+   - Added SPA route ownership for `/`, `/login`, `/auth/callback`, `/onboarding`, `/dashboard`, `/requests/:id`, `/admin/requests`, `/admin/requests/:id`.
+   - Added shared responsive shell with sidebar/topbar and route placeholder surfaces for each required path.
+   - Applied frontend guideline tokens (palette/spacing/type), motion baseline, and reduced-motion handling in `frontend/src/styles.css`.
+3. Implemented Phase 10 Step 10.3 production web delivery assets:
+   - Added `docker/nginx/default.conf` with SPA fallback (`try_files ... /index.html`) and `/api/` reverse proxy to `api:8000`.
+   - Added `docker/web/Dockerfile` multi-stage build (frontend build + NGINX static serving).
+4. Implemented Phase 10 Step 10.4 compose topology updates:
+   - Added `api` and `web` services under `prod-like` profile in `docker-compose.yml`.
+   - Preserved existing default infra-only local profile (`postgres`, `redis`, `zerotier-controller`).
+5. Implemented Phase 10 Step 10.5 dev proxy + docs:
+   - Added Vite dev proxy from `/api` to `http://localhost:8000`.
+   - Updated `README.md` with local Vite run flow and production-like compose profile command.
+   - Added compose host-port knobs in `.env.example` (`API_HOST_PORT`, `WEB_HOST_PORT`).
+6. Updated planning/checklist state:
+   - Marked Phase 10 steps and exit criteria complete in `IMPLEMENTATION_PLAN.md`.
+   - Updated blockers referencing Phase 10 completion in snapshot/Phase 4 notes.
+
+Verification
+1. `npm install --package-lock-only` (inside `frontend/`) passed.
+2. `docker compose --profile prod-like config` passed and shows `web` -> `api` topology wiring.
+3. `npm ci` (inside `frontend/`) failed with `EAI_AGAIN` DNS resolution against `registry.npmjs.org` in this environment.
+4. `npm run build` (inside `frontend/`) is blocked until `npm ci` succeeds (`vite` binary unavailable without install).
+
+In progress
+1. No active implementation tasks in Phase 10 scope.
+
+Next
+1. Resolve environment DNS/network access so `frontend` install/build verification can be rerun (`npm ci`, `npm run build`).
+2. Start Phase 11 Step 11.1 to Step 11.6 (functional login/onboarding/operator/admin SPA screens).
+
+Known bugs / regressions
+1. No functional regressions identified in backend paths touched by this update.
+2. Frontend build verification remains blocked by environment network resolution (`EAI_AGAIN`).
+
+---
+
+Update: 2026-02-12 (Phase 10 frontend verification blocker cleared)
+
+Completed
+1. Re-ran frontend setup after network-access update:
+   - `npm ci` in `frontend/` now succeeds.
+   - `npm run build` in `frontend/` now succeeds and emits production assets under `frontend/dist`.
+2. Re-validated compose topology contract:
+   - `docker compose --profile prod-like config` still resolves `web -> api` wiring.
+3. Performed Vite runtime sanity check:
+   - `npm run dev -- --host 127.0.0.1 --port 4173 --strictPort` started successfully (`VITE v7.3.1 ready`).
+4. Updated implementation checklist state:
+   - Marked Phase 10 verification items `npm ci` and `npm run build` as complete in `IMPLEMENTATION_PLAN.md`.
+
+Verification
+1. `npm ci` (inside `frontend/`) passed.
+2. `npm run build` (inside `frontend/`) passed.
+3. `timeout 15s npm run dev -- --host 127.0.0.1 --port 4173 --strictPort` confirmed Vite startup.
+4. `docker compose --profile prod-like config` passed.
+
+In progress
+1. No active implementation work in Phase 10 scope.
+
+Next
+1. Start Phase 11 Step 11.1 to Step 11.6 (functional SPA screens and API integration).
+2. Optionally align local npm runtime to `11.10.0` to remove non-blocking engine warning in this environment.
+
+Known bugs / regressions
+1. No new regressions detected in this follow-up verification pass.
+2. `npm ci` reports non-blocking `EBADENGINE` warning because host npm is `10.8.2` while workspace metadata targets npm `11.10.0`.

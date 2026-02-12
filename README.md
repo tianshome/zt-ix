@@ -7,6 +7,7 @@ ZT-IX control plane for virtual Internet Exchange onboarding with PeeringDB iden
 ### Prerequisites
 - Python `3.13.x`
 - `uv` package manager
+- Node.js (LTS) + npm `11.10.0` for SPA workspace commands
 - Docker Engine + Docker Compose plugin (for local PostgreSQL/Redis and self-hosted ZeroTier controller runtime validation)
 
 ### Local dependency profile
@@ -84,10 +85,33 @@ Operational notes:
 uv run uvicorn app.main:app --reload
 ```
 
-### Frontend runtime model (design baseline)
-- Production: SPA assets are served by an NGINX `web` container that reverse-proxies `/api/*` to FastAPI `api` container.
+### Frontend runtime model (Phase 10)
+- Production-like profile: SPA assets are served by an NGINX `web` container that reverse-proxies `/api/*` to FastAPI `api` container.
 - Development: run SPA with Vite and proxy API routes to `http://localhost:8000`.
 - Frontend routes are client-side only; backend user-facing workflow data is JSON API based.
+
+### Run SPA locally (Vite + API proxy)
+```bash
+# shell 1
+uv run uvicorn app.main:app --reload
+
+# shell 2
+cd frontend
+npm ci
+npm run dev
+```
+
+Vite serves on `http://localhost:5173` and proxies `/api/*` requests to `http://localhost:8000`.
+
+### Run production-like web/api topology (NGINX + FastAPI containers)
+```bash
+docker compose --profile prod-like up --build web
+```
+
+This profile starts:
+- `web` (NGINX SPA static server) on `http://localhost:8080`
+- `api` (FastAPI) on `http://localhost:8000`
+- dependency services (`postgres`, `redis`, `zerotier-controller`) required by API startup
 
 ### Verification commands
 ```bash
