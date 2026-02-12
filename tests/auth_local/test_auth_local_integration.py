@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -20,10 +19,7 @@ from app.db.models import (
 )
 
 
-def test_local_login_success_sets_session_and_redirects(
-    client: TestClient,
-    db_session: Session,
-) -> None:
+def test_local_login_success_sets_session(client: TestClient, db_session: Session) -> None:
     user = _create_local_user(
         db_session,
         username="operator-local",
@@ -32,13 +28,15 @@ def test_local_login_success_sets_session_and_redirects(
     )
 
     response = client.post(
-        "/auth/local/login",
+        "/api/v1/auth/local/login",
         json={"username": " Operator-Local ", "password": "correct horse battery staple"},
-        follow_redirects=False,
     )
 
-    assert response.status_code == 302
-    assert response.headers["location"] == "http://testserver/onboarding"
+    assert response.status_code == 200
+    login_body = response.json()["data"]
+    assert login_body["auth"]["mode"] == "local"
+    assert login_body["auth"]["authorized_asn_count"] == 1
+    assert login_body["auth"]["has_eligible_asn"] is True
 
     credential_row = db_session.execute(
         select(LocalCredential).where(LocalCredential.user_id == user.id)
@@ -71,20 +69,18 @@ def test_local_login_unknown_user_and_wrong_password_share_error_code(
     )
 
     unknown_user = client.post(
-        "/auth/local/login",
+        "/api/v1/auth/local/login",
         json={"username": "missing-user", "password": "anything"},
-        follow_redirects=False,
     )
-    assert unknown_user.status_code == 302
-    assert _error_code(unknown_user.headers["location"]) == "local_invalid_credentials"
+    assert unknown_user.status_code == 401
+    assert unknown_user.json()["error"]["code"] == "local_invalid_credentials"
 
     wrong_password = client.post(
-        "/auth/local/login",
+        "/api/v1/auth/local/login",
         json={"username": "known-user", "password": "wrong password"},
-        follow_redirects=False,
     )
-    assert wrong_password.status_code == 302
-    assert _error_code(wrong_password.headers["location"]) == "local_invalid_credentials"
+    assert wrong_password.status_code == 401
+    assert wrong_password.json()["error"]["code"] == "local_invalid_credentials"
 
     failed_audits = (
         db_session.execute(
@@ -100,7 +96,7 @@ def test_local_login_unknown_user_and_wrong_password_share_error_code(
     assert failed_audits[-1].event_metadata["code"] == "invalid_credentials"
 
 
-def test_local_login_onboarding_filters_networks_by_access_assignment(
+def test_local_login_onboarding_context_filters_networks_by_access_assignment(
     client: TestClient,
     db_session: Session,
 ) -> None:
@@ -122,26 +118,27 @@ def test_local_login_onboarding_filters_networks_by_access_assignment(
     db_session.commit()
 
     login = client.post(
-        "/auth/local/login",
+        "/api/v1/auth/local/login",
         json={"username": "restricted-user", "password": "restricted password value"},
-        follow_redirects=False,
     )
-    assert login.status_code == 302
-    assert login.headers["location"] == "http://testserver/onboarding"
+    assert login.status_code == 200
 
-    onboarding_response = client.get("/onboarding")
+    onboarding_response = client.get("/api/v1/onboarding/context")
     assert onboarding_response.status_code == 200
-    onboarding_body = onboarding_response.json()
+    onboarding_body = onboarding_response.json()["data"]
     assert onboarding_body["zt_networks"] == [
         {
             "id": "1234567890abcdef",
             "name": "Network cdef",
             "description": None,
+            "is_active": True,
         }
     ]
+    assert onboarding_body["constraints"]["has_network_restrictions"] is True
+    assert onboarding_body["constraints"]["restricted_network_ids"] == ["1234567890abcdef"]
 
 
-def test_local_login_disabled_credential_redirects_support_path(
+def test_local_login_disabled_credential_returns_support_path_error(
     client: TestClient,
     db_session: Session,
 ) -> None:
@@ -154,14 +151,14 @@ def test_local_login_disabled_credential_redirects_support_path(
     )
 
     response = client.post(
-        "/auth/local/login",
+        "/api/v1/auth/local/login",
         json={"username": "disabled-user", "password": "disabled password value"},
-        follow_redirects=False,
     )
 
-    assert response.status_code == 302
-    assert _error_code(response.headers["location"]) == "local_credential_disabled"
-    assert _error_detail(response.headers["location"]) == "contact_support"
+    assert response.status_code == 403
+    error = response.json()["error"]
+    assert error["code"] == "local_credential_disabled"
+    assert error["details"]["detail_code"] == "contact_support"
 
     failed_audit = db_session.execute(
         select(AuditEvent)
@@ -186,19 +183,19 @@ def test_local_login_respects_local_auth_toggle(
     test_app.state.settings = replace(auth_settings, local_auth_enabled=False)
 
     response = client.post(
-        "/auth/local/login",
+        "/api/v1/auth/local/login",
         json={"username": "toggle-user", "password": "toggle password value"},
-        follow_redirects=False,
     )
 
-    assert response.status_code == 302
-    assert _error_code(response.headers["location"]) == "local_auth_disabled"
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "local_auth_disabled"
 
 
-def test_local_login_without_eligible_asn_redirects_error(
+def test_local_login_without_eligible_asn_keeps_session_and_blocks_submission(
     client: TestClient,
     db_session: Session,
 ) -> None:
+    _seed_network(db_session, "abcdef0123456789")
     _create_local_user(
         db_session,
         username="no-asn-user",
@@ -206,14 +203,52 @@ def test_local_login_without_eligible_asn_redirects_error(
         asns=(),
     )
 
-    response = client.post(
-        "/auth/local/login",
+    login = client.post(
+        "/api/v1/auth/local/login",
         json={"username": "no-asn-user", "password": "no asn password value"},
-        follow_redirects=False,
     )
 
-    assert response.status_code == 302
-    assert _error_code(response.headers["location"]) == "no_eligible_asn"
+    assert login.status_code == 200
+    login_body = login.json()["data"]
+    assert login_body["auth"]["authorized_asn_count"] == 0
+    assert login_body["auth"]["has_eligible_asn"] is False
+
+    onboarding = client.get("/api/v1/onboarding/context")
+    assert onboarding.status_code == 200
+    constraints = onboarding.json()["data"]["constraints"]
+    assert constraints["submission_allowed"] is False
+    assert constraints["blocked_reason"] == "no_eligible_asn"
+
+
+def test_auth_logout_clears_authenticated_session(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    _create_local_user(
+        db_session,
+        username="logout-user",
+        password="logout password value",
+        asns=(64512,),
+    )
+    login = client.post(
+        "/api/v1/auth/local/login",
+        json={"username": "logout-user", "password": "logout password value"},
+    )
+    assert login.status_code == 200
+
+    logout = client.post("/api/v1/auth/logout")
+    assert logout.status_code == 200
+    assert logout.json()["data"]["logged_out"] is True
+
+    me_after_logout = client.get("/api/v1/me")
+    assert me_after_logout.status_code == 401
+    assert me_after_logout.json()["error"]["code"] == "unauthenticated"
+
+
+def test_auth_logout_requires_authenticated_session(client: TestClient) -> None:
+    response = client.post("/api/v1/auth/logout")
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "unauthenticated"
 
 
 def _create_local_user(
@@ -247,20 +282,6 @@ def _create_local_user(
 
     db_session.commit()
     return user
-
-
-def _error_code(location: str) -> str | None:
-    values = parse_qs(urlparse(location).query).get("code")
-    if not values:
-        return None
-    return values[0]
-
-
-def _error_detail(location: str) -> str | None:
-    values = parse_qs(urlparse(location).query).get("detail")
-    if not values:
-        return None
-    return values[0]
 
 
 def _seed_network(db_session: Session, network_id: str) -> None:

@@ -1,4 +1,4 @@
-"""Request workflow APIs and page routes."""
+"""Request workflow APIs."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
-from app.config import AppSettings
+from app.config import APPROVAL_MODE_POLICY_AUTO, AppSettings
 from app.db.enums import RequestStatus
-from app.db.models import AppUser, AuditEvent, JoinRequest, UserAsn, ZtMembership
+from app.db.models import AppUser, AuditEvent, JoinRequest, UserAsn, ZtMembership, ZtNetwork
 from app.dependencies import (
     SessionActor,
     get_admin_session_actor,
@@ -80,95 +80,37 @@ class RejectJoinRequestPayload(BaseModel):
         return normalized or None
 
 
-@router.get("/dashboard", name="dashboard_page")
-def dashboard_page(
+@router.get("/api/v1/onboarding/context")
+def api_onboarding_context(
     request: Request,
     db_session: DbSessionDep,
-) -> dict[str, Any]:
-    actor = _require_page_actor(request)
-    request_repo = JoinRequestRepository(db_session)
-    user_requests = request_repo.list_by_user_id(actor.user_id)
-    return {
-        "status": "ok",
-        "request_count": len(user_requests),
-        "requests": [_serialize_join_request(item) for item in user_requests],
-    }
+) -> JSONResponse:
+    actor, auth_error = _require_api_actor(request)
+    if auth_error is not None:
+        return auth_error
+    assert actor is not None
 
-
-@router.get("/requests/{request_id}", name="request_detail_page")
-def request_detail_page(
-    request: Request,
-    request_id: uuid.UUID,
-    db_session: DbSessionDep,
-) -> dict[str, Any]:
-    actor = _require_page_actor(request)
-    request_repo = JoinRequestRepository(db_session)
-    request_row = request_repo.get_by_id(request_id)
-    if request_row is None or request_row.user_id != actor.user_id:
-        raise HTTPException(status_code=404, detail="request not found")
-
-    audit_events = AuditEventRepository(db_session).list_for_target(
-        target_type="join_request",
-        target_id=str(request_row.id),
+    asn_rows = UserAsnRepository(db_session).list_by_user_id(actor.user_id)
+    network_rows = ZtNetworkRepository(db_session).list_active()
+    restricted_network_ids = UserNetworkAccessRepository(db_session).list_network_ids_by_user_id(
+        actor.user_id
     )
-    return {
-        "status": "ok",
-        "request": _serialize_join_request(request_row),
-        "audit_events": [_serialize_audit_event(event) for event in audit_events],
-    }
+    if restricted_network_ids:
+        network_rows = [row for row in network_rows if row.id in restricted_network_ids]
 
-
-@router.get("/admin/requests", name="admin_requests_page")
-def admin_requests_page(
-    request: Request,
-    db_session: DbSessionDep,
-    status: RequestStatus | None = None,
-    asn: int | None = None,
-    zt_network_id: str | None = None,
-    min_age_minutes: int | None = Query(default=None, ge=0),
-) -> dict[str, Any]:
-    _require_page_actor(request, require_admin=True)
-    request_repo = JoinRequestRepository(db_session)
-    admin_requests = request_repo.list_for_admin(
-        status=status,
-        asn=asn,
-        zt_network_id=zt_network_id,
-        min_age_minutes=min_age_minutes,
+    blocked_reason = None if asn_rows else "no_eligible_asn"
+    return _success_response(
+        {
+            "eligible_asns": [_serialize_user_asn(row) for row in asn_rows],
+            "zt_networks": [_serialize_network(row) for row in network_rows],
+            "constraints": {
+                "has_network_restrictions": bool(restricted_network_ids),
+                "restricted_network_ids": sorted(restricted_network_ids),
+                "submission_allowed": bool(asn_rows),
+                "blocked_reason": blocked_reason,
+            },
+        }
     )
-    return {
-        "status": "ok",
-        "request_count": len(admin_requests),
-        "filters": {
-            "status": status.value if status else None,
-            "asn": asn,
-            "zt_network_id": zt_network_id,
-            "min_age_minutes": min_age_minutes,
-        },
-        "requests": [_serialize_join_request(item) for item in admin_requests],
-    }
-
-
-@router.get("/admin/requests/{request_id}", name="admin_request_detail_page")
-def admin_request_detail_page(
-    request: Request,
-    request_id: uuid.UUID,
-    db_session: DbSessionDep,
-) -> dict[str, Any]:
-    _require_page_actor(request, require_admin=True)
-    request_repo = JoinRequestRepository(db_session)
-    request_row = request_repo.get_by_id(request_id)
-    if request_row is None:
-        raise HTTPException(status_code=404, detail="request not found")
-
-    audit_events = AuditEventRepository(db_session).list_for_target(
-        target_type="join_request",
-        target_id=str(request_row.id),
-    )
-    return {
-        "status": "ok",
-        "request": _serialize_join_request(request_row),
-        "audit_events": [_serialize_audit_event(event) for event in audit_events],
-    }
 
 
 @router.get("/api/v1/me")
@@ -218,6 +160,7 @@ def api_create_request(
     request: Request,
     payload: CreateJoinRequestPayload,
     db_session: DbSessionDep,
+    settings: SettingsDep,
 ) -> JSONResponse:
     actor, auth_error = _require_api_actor(request)
     if auth_error is not None:
@@ -292,8 +235,30 @@ def api_create_request(
             "zt_network_id": network_row.id,
         },
     )
-    db_session.commit()
 
+    if settings.workflow_approval_mode == APPROVAL_MODE_POLICY_AUTO:
+        old_status = created.status
+        try:
+            request_repo.transition_status(created, RequestStatus.APPROVED)
+        except InvalidStateTransitionError:
+            return _invalid_transition_response(created)
+
+        _enqueue_provisioning_attempt(request_id=created.id, settings=settings)
+        _write_status_audit_event(
+            db_session=db_session,
+            actor_user_id=None,
+            request_row=created,
+            old_status=old_status,
+            metadata={
+                "approval_mode": settings.workflow_approval_mode,
+                "decision_source": "policy_auto",
+                "auto_approved": True,
+                "queue_action": "provisioning_enqueued",
+                "submitted_by_user_id": str(actor.user_id),
+            },
+        )
+
+    db_session.commit()
     return _success_response({"request": _serialize_join_request(created)}, status_code=201)
 
 
@@ -331,6 +296,73 @@ def api_request_detail(
         )
 
     return _success_response({"request": _serialize_join_request(request_row)})
+
+
+@router.get("/api/v1/admin/requests")
+def api_admin_list_requests(
+    request: Request,
+    db_session: DbSessionDep,
+    status: RequestStatus | None = None,
+    asn: int | None = None,
+    zt_network_id: str | None = None,
+    min_age_minutes: int | None = Query(default=None, ge=0),
+) -> JSONResponse:
+    actor, auth_error = _require_api_actor(request, require_admin=True)
+    if auth_error is not None:
+        return auth_error
+    assert actor is not None
+
+    request_repo = JoinRequestRepository(db_session)
+    admin_requests = request_repo.list_for_admin(
+        status=status,
+        asn=asn,
+        zt_network_id=zt_network_id,
+        min_age_minutes=min_age_minutes,
+    )
+    return _success_response(
+        {
+            "request_count": len(admin_requests),
+            "filters": {
+                "status": status.value if status else None,
+                "asn": asn,
+                "zt_network_id": zt_network_id,
+                "min_age_minutes": min_age_minutes,
+            },
+            "requests": [_serialize_join_request(item) for item in admin_requests],
+        }
+    )
+
+
+@router.get("/api/v1/admin/requests/{request_id}")
+def api_admin_request_detail(
+    request: Request,
+    request_id: uuid.UUID,
+    db_session: DbSessionDep,
+) -> JSONResponse:
+    actor, auth_error = _require_api_actor(request, require_admin=True)
+    if auth_error is not None:
+        return auth_error
+    assert actor is not None
+
+    request_repo = JoinRequestRepository(db_session)
+    request_row = request_repo.get_by_id(request_id)
+    if request_row is None:
+        return _error_response(
+            status_code=404,
+            code="request_not_found",
+            message="Request not found.",
+        )
+
+    audit_events = AuditEventRepository(db_session).list_for_target(
+        target_type="join_request",
+        target_id=str(request_row.id),
+    )
+    return _success_response(
+        {
+            "request": _serialize_join_request(request_row),
+            "audit_events": [_serialize_audit_event(event) for event in audit_events],
+        }
+    )
 
 
 @router.post("/api/v1/admin/requests/{request_id}/approve")
@@ -501,13 +533,6 @@ def _require_api_actor(
     return actor, None
 
 
-def _require_page_actor(request: Request, *, require_admin: bool = False) -> SessionActor:
-    actor = get_session_actor(request)
-    if require_admin:
-        return get_admin_session_actor(actor)
-    return actor
-
-
 def _success_response(data: dict[str, Any], *, status_code: int = 200) -> JSONResponse:
     return JSONResponse(status_code=status_code, content={"data": data})
 
@@ -543,7 +568,7 @@ def _invalid_transition_response(request_row: JoinRequest) -> JSONResponse:
 def _write_status_audit_event(
     *,
     db_session: Session,
-    actor_user_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
     request_row: JoinRequest,
     old_status: RequestStatus,
     metadata: dict[str, Any] | None = None,
@@ -590,6 +615,15 @@ def _serialize_user_asn(row: UserAsn) -> dict[str, Any]:
         "source": row.source,
         "verified_at": _iso_datetime(row.verified_at),
         "created_at": _iso_datetime(row.created_at),
+    }
+
+
+def _serialize_network(row: ZtNetwork) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "description": row.description,
+        "is_active": row.is_active,
     }
 
 

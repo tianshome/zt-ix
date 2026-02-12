@@ -1,17 +1,16 @@
-"""PeeringDB OAuth login/callback/logout routes."""
+"""SPA authentication API routes."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
-from starlette.datastructures import URL
-from starlette.responses import RedirectResponse, Response
 
 from app.auth import (
     generate_nonce,
@@ -22,6 +21,7 @@ from app.auth import (
     verify_password,
 )
 from app.config import AppSettings
+from app.db.models import AppUser
 from app.dependencies import get_app_settings, get_db_session, get_peeringdb_client
 from app.integrations.peeringdb import (
     PeeringDBClientError,
@@ -38,7 +38,7 @@ from app.repositories.oauth_state_nonces import (
 from app.repositories.user_asns import UserAsnRecord, UserAsnRepository
 from app.repositories.users import UserRepository
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
 SettingsDep = Annotated[AppSettings, Depends(get_app_settings)]
 DbSessionDep = Annotated[Session, Depends(get_db_session)]
 PeeringDBClientDep = Annotated[PeeringDBClientProtocol, Depends(get_peeringdb_client)]
@@ -61,12 +61,25 @@ class LocalLoginPayload(BaseModel):
         return value
 
 
-@router.get("/login")
-async def auth_login(
-    request: Request,
+class PeeringDBCallbackPayload(BaseModel):
+    code: str | None = None
+    state: str | None = None
+    error: str | None = None
+
+    @field_validator("code", "state", "error")
+    @classmethod
+    def _normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+@router.post("/api/v1/auth/peeringdb/start")
+async def api_auth_peeringdb_start(
     settings: SettingsDep,
     db_session: DbSessionDep,
-) -> Response:
+) -> JSONResponse:
     state = generate_state()
     nonce = generate_nonce()
     pkce_verifier = generate_pkce_verifier()
@@ -101,57 +114,92 @@ async def auth_login(
         "code_challenge_method": "S256",
     }
     authorization_url = f"{settings.peeringdb_authorization_url}?{urlencode(query_params)}"
-    return RedirectResponse(authorization_url, status_code=302)
+
+    return _success_response(
+        {
+            "authorization_url": authorization_url,
+            "state": state,
+            "expires_at": expires_at.isoformat(),
+            "redirect_uri": settings.peeringdb_redirect_uri,
+            "scope": settings.peeringdb_scope_param,
+        }
+    )
 
 
-@router.get("/callback")
-async def auth_callback(
+@router.post("/api/v1/auth/peeringdb/callback")
+async def api_auth_peeringdb_callback(
     request: Request,
+    payload: PeeringDBCallbackPayload,
     peeringdb_client: PeeringDBClientDep,
     db_session: DbSessionDep,
-    code: str | None = None,
-    state: str | None = None,
-    error: str | None = None,
-) -> Response:
+) -> JSONResponse:
     audit_repo = AuditEventRepository(db_session)
 
-    if error:
+    if payload.error:
         _audit_callback_failure(
             audit_repo,
             error_code="oauth_error",
-            target_state=state,
-            metadata={"oauth_error": error},
+            target_state=payload.state,
+            metadata={"oauth_error": payload.error},
         )
         db_session.commit()
-        return _error_redirect(request, "oauth_error", detail=error)
+        return _error_response(
+            status_code=400,
+            code="oauth_error",
+            message="Login was canceled or rejected by PeeringDB.",
+            details={"oauth_error": payload.error},
+        )
 
-    if not code or not state:
-        _audit_callback_failure(audit_repo, error_code="missing_code_or_state", target_state=state)
+    if not payload.code or not payload.state:
+        _audit_callback_failure(
+            audit_repo,
+            error_code="missing_code_or_state",
+            target_state=payload.state,
+        )
         db_session.commit()
-        return _error_redirect(request, "missing_code_or_state", detail="missing_code_or_state")
+        return _error_response(
+            status_code=400,
+            code="missing_code_or_state",
+            message="Callback is missing required OAuth parameters.",
+        )
 
     oauth_repo = OauthStateNonceRepository(db_session)
-    consume_result = oauth_repo.consume_state(state=state)
+    consume_result = oauth_repo.consume_state(state=payload.state)
 
     if consume_result.status is OauthStateConsumeStatus.MISSING:
-        _audit_callback_failure(audit_repo, error_code="invalid_state", target_state=state)
+        _audit_callback_failure(audit_repo, error_code="invalid_state", target_state=payload.state)
         db_session.commit()
-        return _error_redirect(request, "invalid_state", detail="state_missing_or_reused")
+        return _error_response(
+            status_code=400,
+            code="invalid_state",
+            message="Login session is invalid or has already been used.",
+            details={"detail_code": "state_missing_or_reused"},
+        )
 
     if consume_result.status is OauthStateConsumeStatus.EXPIRED:
-        _audit_callback_failure(audit_repo, error_code="expired_state", target_state=state)
+        _audit_callback_failure(audit_repo, error_code="expired_state", target_state=payload.state)
         db_session.commit()
-        return _error_redirect(request, "expired_state", detail="state_expired")
+        return _error_response(
+            status_code=400,
+            code="expired_state",
+            message="Login session expired before callback completed.",
+            details={"detail_code": "state_expired"},
+        )
 
     state_row = consume_result.row
     if state_row is None:
-        _audit_callback_failure(audit_repo, error_code="invalid_state", target_state=state)
+        _audit_callback_failure(audit_repo, error_code="invalid_state", target_state=payload.state)
         db_session.commit()
-        return _error_redirect(request, "invalid_state", detail="state_missing_or_reused")
+        return _error_response(
+            status_code=400,
+            code="invalid_state",
+            message="Login session is invalid or has already been used.",
+            details={"detail_code": "state_missing_or_reused"},
+        )
 
     try:
         token_response = await peeringdb_client.exchange_code_for_tokens(
-            code=code,
+            code=payload.code,
             code_verifier=state_row.pkce_verifier,
             redirect_uri=state_row.redirect_uri,
         )
@@ -162,20 +210,30 @@ async def auth_callback(
         _audit_callback_failure(
             audit_repo,
             error_code="invalid_nonce",
-            target_state=state,
+            target_state=payload.state,
             metadata={"detail": str(exc), "detail_code": detail_code},
         )
         db_session.commit()
-        return _error_redirect(request, "invalid_nonce", detail=detail_code)
+        return _error_response(
+            status_code=400,
+            code="invalid_nonce",
+            message="OIDC nonce validation failed for the returned identity token.",
+            details={"detail_code": detail_code},
+        )
     except PeeringDBClientError as exc:
         _audit_callback_failure(
             audit_repo,
             error_code="upstream_auth_failure",
-            target_state=state,
+            target_state=payload.state,
             metadata={"detail": str(exc)},
         )
         db_session.commit()
-        return _error_redirect(request, "upstream_auth_failure", detail=str(exc))
+        return _error_response(
+            status_code=400,
+            code="upstream_auth_failure",
+            message="PeeringDB token or profile request failed.",
+            details={"detail": str(exc)},
+        )
 
     user_repo = UserRepository(db_session)
     user_asn_repo = UserAsnRepository(db_session)
@@ -203,6 +261,7 @@ async def auth_callback(
             "peeringdb_user_id": profile.peeringdb_user_id,
             "is_admin": user.is_admin,
             "authenticated_at": datetime.now(UTC).isoformat(),
+            "auth_mode": "peeringdb",
         }
     )
 
@@ -216,7 +275,6 @@ async def auth_callback(
             "authorized_asn_count": len(asn_rows),
         },
     )
-
     if not asn_rows:
         audit_repo.create_event(
             action="auth.callback.no_eligible_asn",
@@ -224,20 +282,27 @@ async def auth_callback(
             target_id=str(user.id),
             actor_user_id=user.id,
         )
-        db_session.commit()
-        return _error_redirect(request, "no_eligible_asn")
 
     db_session.commit()
-    return RedirectResponse(str(request.url_for("onboarding_page")), status_code=302)
+    return _success_response(
+        {
+            "auth": {
+                "mode": "peeringdb",
+                "authorized_asn_count": len(asn_rows),
+                "has_eligible_asn": bool(asn_rows),
+            },
+            "user": _serialize_user_summary(user),
+        }
+    )
 
 
-@router.post("/local/login")
-async def auth_local_login(
+@router.post("/api/v1/auth/local/login")
+async def api_auth_local_login(
     request: Request,
     payload: LocalLoginPayload,
     settings: SettingsDep,
     db_session: DbSessionDep,
-) -> Response:
+) -> JSONResponse:
     audit_repo = AuditEventRepository(db_session)
     if not settings.local_auth_enabled:
         _audit_local_login_failure(
@@ -246,7 +311,11 @@ async def auth_local_login(
             failure_code="local_auth_disabled",
         )
         db_session.commit()
-        return _error_redirect(request, "local_auth_disabled")
+        return _error_response(
+            status_code=403,
+            code="local_auth_disabled",
+            message="Local login is disabled in this deployment.",
+        )
 
     credential_repo = LocalCredentialRepository(db_session)
     credential = credential_repo.get_by_login_username(payload.username)
@@ -258,7 +327,11 @@ async def auth_local_login(
             failure_code="invalid_credentials",
         )
         db_session.commit()
-        return _error_redirect(request, "local_invalid_credentials")
+        return _error_response(
+            status_code=401,
+            code="local_invalid_credentials",
+            message="Invalid username or password.",
+        )
 
     if not credential.is_enabled:
         _audit_local_login_failure(
@@ -268,7 +341,12 @@ async def auth_local_login(
             failure_code="credential_disabled",
         )
         db_session.commit()
-        return _error_redirect(request, "local_credential_disabled", detail="contact_support")
+        return _error_response(
+            status_code=403,
+            code="local_credential_disabled",
+            message="This local account is disabled. Contact support.",
+            details={"detail_code": "contact_support"},
+        )
 
     if not verify_password(password=payload.password, encoded_hash=credential.password_hash):
         _audit_local_login_failure(
@@ -278,7 +356,11 @@ async def auth_local_login(
             failure_code="invalid_credentials",
         )
         db_session.commit()
-        return _error_redirect(request, "local_invalid_credentials")
+        return _error_response(
+            status_code=401,
+            code="local_invalid_credentials",
+            message="Invalid username or password.",
+        )
 
     user = credential.user
     asn_rows = UserAsnRepository(db_session).list_by_user_id(user.id)
@@ -290,8 +372,6 @@ async def auth_local_login(
             actor_user_id=user.id,
             metadata={"login_username": credential.login_username},
         )
-        db_session.commit()
-        return _error_redirect(request, "no_eligible_asn")
 
     credential_repo.touch_last_login(credential)
     request.session.clear()
@@ -316,26 +396,40 @@ async def auth_local_login(
         },
     )
     db_session.commit()
-    return RedirectResponse(str(request.url_for("onboarding_page")), status_code=302)
+    return _success_response(
+        {
+            "auth": {
+                "mode": "local",
+                "authorized_asn_count": len(asn_rows),
+                "has_eligible_asn": bool(asn_rows),
+            },
+            "user": _serialize_user_summary(user),
+        }
+    )
 
 
-@router.get("/logout")
-async def auth_logout(
+@router.post("/api/v1/auth/logout")
+async def api_auth_logout(
     request: Request,
     db_session: DbSessionDep,
-) -> Response:
+) -> JSONResponse:
     actor_user_id = _session_user_id(request)
-    request.session.clear()
+    if actor_user_id is None:
+        return _error_response(
+            status_code=401,
+            code="unauthenticated",
+            message="Authentication required.",
+        )
 
+    request.session.clear()
     AuditEventRepository(db_session).create_event(
         action="auth.logout",
         target_type="auth_session",
-        target_id=str(actor_user_id) if actor_user_id else "anonymous",
+        target_id=str(actor_user_id),
         actor_user_id=actor_user_id,
     )
     db_session.commit()
-
-    return RedirectResponse(str(request.url_for("root")), status_code=302)
+    return _success_response({"logged_out": True})
 
 
 def _session_user_id(request: Request) -> uuid.UUID | None:
@@ -368,15 +462,6 @@ def _audit_callback_failure(
     )
 
 
-def _error_redirect(request: Request, code: str, detail: str | None = None) -> RedirectResponse:
-    params: dict[str, str] = {"code": code}
-    if detail:
-        params["detail"] = detail
-
-    error_url = URL(str(request.url_for("error_page"))).include_query_params(**params)
-    return RedirectResponse(str(error_url), status_code=302)
-
-
 def _nonce_error_detail(exc: PeeringDBNonceValidationError) -> str:
     detail_map = {
         "missing id_token for nonce validation": "missing_id_token",
@@ -403,5 +488,38 @@ def _audit_local_login_failure(
         metadata={
             "code": failure_code,
             "login_username": login_username,
+        },
+    )
+
+
+def _serialize_user_summary(user: AppUser) -> dict[str, Any]:
+    return {
+        "id": str(user.id),
+        "username": user.username,
+        "full_name": user.full_name,
+        "email": user.email,
+        "is_admin": user.is_admin,
+    }
+
+
+def _success_response(data: dict[str, Any], *, status_code: int = 200) -> JSONResponse:
+    return JSONResponse(status_code=status_code, content={"data": data})
+
+
+def _error_response(
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+    details: dict[str, Any] | None = None,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": {
+                "code": code,
+                "message": message,
+                "details": details or {},
+            }
         },
     )

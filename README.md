@@ -125,7 +125,7 @@ Use these steps on a machine where both backend and SPA frontend can run locally
    ```bash
    uv run uvicorn app.main:app --reload
    ```
-5. Run SPA frontend (once Phase 9 implementation lands):
+5. Run SPA frontend:
    ```bash
    cd frontend
    npm ci

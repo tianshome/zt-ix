@@ -1224,3 +1224,59 @@ Next
 
 Known bugs / regressions
 1. None identified for this documentation-only adjustment.
+
+---
+
+Update: 2026-02-12 (Phase 9 API realignment + approval-mode runtime wiring completed)
+
+Decision
+1. Backend now treats SPA as the only workflow UI contract:
+   - removed backend redirect/page dependencies for auth/workflow flows,
+   - exposed JSON API endpoints for auth start/callback/local login/logout, onboarding context, and admin list/detail.
+2. `workflow.approval_mode` is now runtime-driven from `runtime-config.yaml` (`manual_admin` default, `policy_auto` optional).
+3. `policy_auto` remains intentionally bounded to existing ASN/network eligibility checks in `v0.1.0`.
+
+Completed
+1. Implemented Phase 9 Step 9.1 auth API surface in `app/routes/auth.py`:
+   - `POST /api/v1/auth/peeringdb/start`
+   - `POST /api/v1/auth/peeringdb/callback`
+   - `POST /api/v1/auth/local/login`
+   - `POST /api/v1/auth/logout`
+   - Removed legacy redirect responses and `/auth/*` compatibility route behavior.
+2. Implemented Phase 9 Step 9.2 workflow/admin API surface in `app/routes/workflow.py`:
+   - `GET /api/v1/onboarding/context`
+   - `GET /api/v1/admin/requests`
+   - `GET /api/v1/admin/requests/{request_id}`
+3. Implemented Phase 9 Step 9.3 and Step 9.7 backend cleanup:
+   - removed backend `/error` contract and legacy page-route handlers (`/onboarding`, `/dashboard`, `/requests/{id}`, `/admin/requests*`).
+4. Implemented Phase 9 Step 9.4 runtime-config approval-mode parsing in `app/config.py`:
+   - reads `workflow.approval_mode` from `ZTIX_RUNTIME_CONFIG_PATH` (default `runtime-config.yaml`),
+   - validates allowed values (`manual_admin`, `policy_auto`).
+5. Implemented Phase 9 Step 9.5 approval behavior in `app/routes/workflow.py`:
+   - `manual_admin`: preserves pending -> admin decision flow.
+   - `policy_auto`: auto transitions eligible `pending` requests to `approved`, enqueues provisioning, and emits policy audit metadata.
+6. Implemented Phase 9 Step 9.6 test realignment and expansion:
+   - rewrote `tests/auth/test_auth_integration.py` for JSON callback/start semantics,
+   - rewrote `tests/auth_local/test_auth_local_integration.py` for API login/logout and onboarding context behavior,
+   - rewrote `tests/workflow/test_request_workflow_integration.py` for API-only onboarding/admin contracts + policy-auto assertions,
+   - added runtime-config approval-mode tests in `tests/test_config.py`.
+7. Updated supporting docs/config:
+   - `.env.example` redirect URI default now SPA callback path and includes `ZTIX_RUNTIME_CONFIG_PATH`.
+   - `README.md` wording updated to remove stale pre-Phase-9 note.
+   - `IMPLEMENTATION_PLAN.md` updated to Version `1.9` with Phase 9 + Phase 4 Step 4.7 completion checkboxes.
+
+Verification
+1. `uv run ruff check app tests` passed.
+2. `uv run mypy .` passed.
+3. `uv run pytest tests/auth -q tests/auth_local -q tests/workflow -q tests/test_config.py -q` passed.
+4. `uv run pytest -q` passed.
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Start Phase 10 Step 10.1 to Step 10.5 (frontend SPA workspace and NGINX/Vite runtime topology).
+2. Begin Phase 11 core SPA screens after Phase 10 platform scaffolding is in place.
+
+Known bugs / regressions
+1. None detected in automated lint/type/test coverage for this scope.

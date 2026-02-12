@@ -18,11 +18,15 @@ from app.integrations.peeringdb import (
 from tests.auth.conftest import StubPeeringDBClient
 
 
-def test_auth_login_persists_state_and_redirects(client: TestClient, db_session: Session) -> None:
-    response = client.get("/auth/login", follow_redirects=False)
+def test_auth_start_persists_state_and_returns_authorization_url(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    response = client.post("/api/v1/auth/peeringdb/start")
 
-    assert response.status_code == 302
-    location = response.headers["location"]
+    assert response.status_code == 200
+    body = response.json()["data"]
+    location = body["authorization_url"]
 
     parsed = urlparse(location)
     params = parse_qs(parsed.query)
@@ -32,8 +36,9 @@ def test_auth_login_persists_state_and_redirects(client: TestClient, db_session:
     assert params["scope"] == ["openid profile email networks"]
     assert params["code_challenge_method"] == ["S256"]
 
-    state = params["state"][0]
+    state = body["state"]
     nonce = params["nonce"][0]
+    assert params["state"] == [state]
 
     oauth_row = db_session.execute(
         select(OauthStateNonce).where(OauthStateNonce.state == state)
@@ -53,9 +58,8 @@ def test_auth_callback_success_upserts_user_and_asns(
     db_session: Session,
     stub_peeringdb_client: StubPeeringDBClient,
 ) -> None:
-    login_response = client.get("/auth/login", follow_redirects=False)
-    login_params = parse_qs(urlparse(login_response.headers["location"]).query)
-    state = login_params["state"][0]
+    start_response = client.post("/api/v1/auth/peeringdb/start")
+    state = start_response.json()["data"]["state"]
 
     oauth_row = db_session.execute(
         select(OauthStateNonce).where(OauthStateNonce.state == state)
@@ -76,13 +80,16 @@ def test_auth_callback_success_upserts_user_and_asns(
         ),
     )
 
-    callback_response = client.get(
-        f"/auth/callback?code=abc123&state={state}",
-        follow_redirects=False,
+    callback_response = client.post(
+        "/api/v1/auth/peeringdb/callback",
+        json={"code": "abc123", "state": state},
     )
 
-    assert callback_response.status_code == 302
-    assert callback_response.headers["location"] == "http://testserver/onboarding"
+    assert callback_response.status_code == 200
+    callback_body = callback_response.json()["data"]
+    assert callback_body["auth"]["mode"] == "peeringdb"
+    assert callback_body["auth"]["authorized_asn_count"] == 1
+    assert callback_body["auth"]["has_eligible_asn"] is True
 
     assert len(stub_peeringdb_client.token_calls) == 1
     assert stub_peeringdb_client.token_calls[0]["code_verifier"] == oauth_row.pkce_verifier
@@ -107,10 +114,13 @@ def test_auth_callback_success_upserts_user_and_asns(
 
 
 def test_auth_callback_rejects_invalid_state(client: TestClient, db_session: Session) -> None:
-    response = client.get("/auth/callback?code=abc123&state=does-not-exist", follow_redirects=False)
+    response = client.post(
+        "/api/v1/auth/peeringdb/callback",
+        json={"code": "abc123", "state": "does-not-exist"},
+    )
 
-    assert response.status_code == 302
-    assert _error_code_from_location(response.headers["location"]) == "invalid_state"
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_state"
 
     failure_audit = db_session.execute(
         select(AuditEvent)
@@ -125,15 +135,18 @@ def test_auth_callback_handles_token_exchange_failure(
     db_session: Session,
     stub_peeringdb_client: StubPeeringDBClient,
 ) -> None:
-    login_response = client.get("/auth/login", follow_redirects=False)
-    state = parse_qs(urlparse(login_response.headers["location"]).query)["state"][0]
+    start_response = client.post("/api/v1/auth/peeringdb/start")
+    state = start_response.json()["data"]["state"]
 
     stub_peeringdb_client.token_result = PeeringDBTokenExchangeError("token endpoint timeout")
 
-    response = client.get(f"/auth/callback?code=abc123&state={state}", follow_redirects=False)
+    response = client.post(
+        "/api/v1/auth/peeringdb/callback",
+        json={"code": "abc123", "state": state},
+    )
 
-    assert response.status_code == 302
-    assert _error_code_from_location(response.headers["location"]) == "upstream_auth_failure"
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "upstream_auth_failure"
 
     consumed_state = db_session.execute(
         select(OauthStateNonce).where(OauthStateNonce.state == state)
@@ -143,51 +156,46 @@ def test_auth_callback_handles_token_exchange_failure(
 
 def test_auth_callback_rejects_invalid_nonce(
     client: TestClient,
-    db_session: Session,
     stub_peeringdb_client: StubPeeringDBClient,
 ) -> None:
-    login_response = client.get("/auth/login", follow_redirects=False)
-    state = parse_qs(urlparse(login_response.headers["location"]).query)["state"][0]
+    start_response = client.post("/api/v1/auth/peeringdb/start")
+    state = start_response.json()["data"]["state"]
 
     stub_peeringdb_client.token_result = PeeringDBTokenResponse(
         access_token="token-success",
         id_token=_unsigned_id_token({"nonce": "wrong-nonce", "sub": "2002"}),
     )
 
-    response = client.get(f"/auth/callback?code=abc123&state={state}", follow_redirects=False)
+    response = client.post(
+        "/api/v1/auth/peeringdb/callback",
+        json={"code": "abc123", "state": state},
+    )
 
-    assert response.status_code == 302
-    assert _error_code_from_location(response.headers["location"]) == "invalid_nonce"
-    assert _error_detail_from_location(response.headers["location"]) == "nonce_mismatch"
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_nonce"
+    assert response.json()["error"]["details"]["detail_code"] == "nonce_mismatch"
 
 
 def test_auth_callback_missing_id_token_returns_nonce_detail(
     client: TestClient,
     stub_peeringdb_client: StubPeeringDBClient,
 ) -> None:
-    login_response = client.get("/auth/login", follow_redirects=False)
-    state = parse_qs(urlparse(login_response.headers["location"]).query)["state"][0]
+    start_response = client.post("/api/v1/auth/peeringdb/start")
+    state = start_response.json()["data"]["state"]
 
     stub_peeringdb_client.token_result = PeeringDBTokenResponse(
         access_token="token-success",
         id_token=None,
     )
 
-    callback_response = client.get(
-        f"/auth/callback?code=abc123&state={state}",
-        follow_redirects=False,
+    callback_response = client.post(
+        "/api/v1/auth/peeringdb/callback",
+        json={"code": "abc123", "state": state},
     )
-    error_location = callback_response.headers["location"]
 
-    assert callback_response.status_code == 302
-    assert _error_code_from_location(error_location) == "invalid_nonce"
-    assert _error_detail_from_location(error_location) == "missing_id_token"
-
-    error_response = client.get(error_location)
-    body = error_response.json()
-    assert body["code"] == "invalid_nonce"
-    assert body["detail"] == "missing_id_token"
-    assert body["message"] == "OIDC nonce validation failed for the returned identity token."
+    assert callback_response.status_code == 400
+    assert callback_response.json()["error"]["code"] == "invalid_nonce"
+    assert callback_response.json()["error"]["details"]["detail_code"] == "missing_id_token"
 
 
 def test_auth_callback_replay_state_is_rejected(
@@ -195,8 +203,8 @@ def test_auth_callback_replay_state_is_rejected(
     stub_peeringdb_client: StubPeeringDBClient,
     db_session: Session,
 ) -> None:
-    login_response = client.get("/auth/login", follow_redirects=False)
-    state = parse_qs(urlparse(login_response.headers["location"]).query)["state"][0]
+    start_response = client.post("/api/v1/auth/peeringdb/start")
+    state = start_response.json()["data"]["state"]
 
     oauth_row = db_session.execute(
         select(OauthStateNonce).where(OauthStateNonce.state == state)
@@ -213,28 +221,18 @@ def test_auth_callback_replay_state_is_rejected(
         networks=(PeeringDBNetwork(asn=64550, net_id=50, net_name="Net50", perms=15),),
     )
 
-    first = client.get(f"/auth/callback?code=abc123&state={state}", follow_redirects=False)
-    second = client.get(f"/auth/callback?code=abc123&state={state}", follow_redirects=False)
+    first = client.post(
+        "/api/v1/auth/peeringdb/callback",
+        json={"code": "abc123", "state": state},
+    )
+    second = client.post(
+        "/api/v1/auth/peeringdb/callback",
+        json={"code": "abc123", "state": state},
+    )
 
-    assert first.status_code == 302
-    assert second.status_code == 302
-    assert _error_code_from_location(second.headers["location"]) == "invalid_state"
-
-
-def _error_code_from_location(location: str) -> str | None:
-    params = parse_qs(urlparse(location).query)
-    values = params.get("code")
-    if not values:
-        return None
-    return values[0]
-
-
-def _error_detail_from_location(location: str) -> str | None:
-    params = parse_qs(urlparse(location).query)
-    values = params.get("detail")
-    if not values:
-        return None
-    return values[0]
+    assert first.status_code == 200
+    assert second.status_code == 400
+    assert second.json()["error"]["code"] == "invalid_state"
 
 
 def _unsigned_id_token(payload: dict[str, str]) -> str:

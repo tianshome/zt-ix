@@ -3,12 +3,14 @@ from __future__ import annotations
 import base64
 import json
 import uuid
-from urllib.parse import parse_qs, urlparse
+from dataclasses import replace
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import AppSettings
 from app.db.enums import RequestStatus
 from app.db.models import (
     AppUser,
@@ -25,6 +27,50 @@ from app.integrations.peeringdb import (
     PeeringDBUserProfile,
 )
 from tests.workflow.conftest import StubPeeringDBClient
+
+
+def test_onboarding_context_returns_eligible_asns_and_network_constraints(
+    client: TestClient,
+    db_session: Session,
+    stub_peeringdb_client: StubPeeringDBClient,
+) -> None:
+    _seed_network(db_session, network_id="abcdef0123456789")
+    _seed_network(db_session, network_id="1234567890abcdef")
+
+    _authenticate_session(
+        client=client,
+        db_session=db_session,
+        stub_peeringdb_client=stub_peeringdb_client,
+        peeringdb_user_id=1101,
+        username="operator-1101",
+        asns=(64511,),
+    )
+    user = db_session.execute(select(AppUser).where(AppUser.peeringdb_user_id == 1101)).scalar_one()
+    db_session.add(
+        UserNetworkAccess(
+            user_id=user.id,
+            zt_network_id="1234567890abcdef",
+            source="local",
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/api/v1/onboarding/context")
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["eligible_asns"][0]["asn"] == 64511
+    assert body["zt_networks"] == [
+        {
+            "id": "1234567890abcdef",
+            "name": "ZT IX Fabric cdef",
+            "description": None,
+            "is_active": True,
+        }
+    ]
+    assert body["constraints"]["has_network_restrictions"] is True
+    assert body["constraints"]["restricted_network_ids"] == ["1234567890abcdef"]
+    assert body["constraints"]["submission_allowed"] is True
+    assert body["constraints"]["blocked_reason"] is None
 
 
 def test_create_request_enforces_ownership_and_duplicate_conflict(
@@ -81,7 +127,7 @@ def test_create_request_enforces_ownership_and_duplicate_conflict(
     assert created_audits[0].target_id == created_request["id"]
 
 
-def test_operator_dashboard_and_detail_are_user_scoped(
+def test_operator_request_api_is_user_scoped(
     client: TestClient,
     db_session: Session,
     stub_peeringdb_client: StubPeeringDBClient,
@@ -101,15 +147,15 @@ def test_operator_dashboard_and_detail_are_user_scoped(
     )
     request_id = create_response.json()["data"]["request"]["id"]
 
-    dashboard_response = client.get("/dashboard")
-    assert dashboard_response.status_code == 200
-    dashboard_body = dashboard_response.json()
-    assert dashboard_body["request_count"] == 1
-    assert dashboard_body["requests"][0]["id"] == request_id
+    own_list_response = client.get("/api/v1/requests")
+    assert own_list_response.status_code == 200
+    own_requests = own_list_response.json()["data"]["requests"]
+    assert len(own_requests) == 1
+    assert own_requests[0]["id"] == request_id
 
-    own_detail_response = client.get(f"/requests/{request_id}")
+    own_detail_response = client.get(f"/api/v1/requests/{request_id}")
     assert own_detail_response.status_code == 200
-    assert own_detail_response.json()["request"]["id"] == request_id
+    assert own_detail_response.json()["data"]["request"]["id"] == request_id
 
     _authenticate_session(
         client=client,
@@ -119,12 +165,9 @@ def test_operator_dashboard_and_detail_are_user_scoped(
         username="operator-1302",
         asns=(64521,),
     )
-    cross_user_page_response = client.get(f"/requests/{request_id}")
-    assert cross_user_page_response.status_code == 404
-
-    cross_user_api_response = client.get(f"/api/v1/requests/{request_id}")
-    assert cross_user_api_response.status_code == 404
-    assert cross_user_api_response.json()["error"]["code"] == "request_not_found"
+    cross_user_detail_response = client.get(f"/api/v1/requests/{request_id}")
+    assert cross_user_detail_response.status_code == 404
+    assert cross_user_detail_response.json()["error"]["code"] == "request_not_found"
 
 
 def test_request_api_detail_includes_membership_when_present(
@@ -219,9 +262,9 @@ def test_admin_queue_filters_and_approve_reject_transitions(
         asns=(64550,),
     )
 
-    pending_queue_response = client.get("/admin/requests?status=pending")
+    pending_queue_response = client.get("/api/v1/admin/requests?status=pending")
     assert pending_queue_response.status_code == 200
-    pending_ids = {row["id"] for row in pending_queue_response.json()["requests"]}
+    pending_ids = {row["id"] for row in pending_queue_response.json()["data"]["requests"]}
     assert first_request_id in pending_ids
     assert second_request_id in pending_ids
 
@@ -247,9 +290,9 @@ def test_admin_queue_filters_and_approve_reject_transitions(
     assert reject_with_reason.status_code == 200
     assert reject_with_reason.json()["data"]["request"]["status"] == "rejected"
 
-    approved_queue_response = client.get("/admin/requests?status=approved")
+    approved_queue_response = client.get("/api/v1/admin/requests?status=approved")
     assert approved_queue_response.status_code == 200
-    approved_ids = {row["id"] for row in approved_queue_response.json()["requests"]}
+    approved_ids = {row["id"] for row in approved_queue_response.json()["data"]["requests"]}
     assert first_request_id in approved_ids
     assert second_request_id not in approved_ids
 
@@ -263,6 +306,51 @@ def test_admin_queue_filters_and_approve_reject_transitions(
         .all()
     )
     assert len(transition_audits) >= 2
+
+
+def test_admin_request_detail_includes_audit_context(
+    client: TestClient,
+    db_session: Session,
+    stub_peeringdb_client: StubPeeringDBClient,
+) -> None:
+    _seed_network(db_session)
+    _authenticate_session(
+        client=client,
+        db_session=db_session,
+        stub_peeringdb_client=stub_peeringdb_client,
+        peeringdb_user_id=1451,
+        username="operator-1451",
+        asns=(64551,),
+    )
+    create_response = client.post(
+        "/api/v1/requests",
+        json={"asn": 64551, "zt_network_id": "abcdef0123456789"},
+    )
+    request_id = create_response.json()["data"]["request"]["id"]
+
+    db_session.add(
+        AppUser(
+            peeringdb_user_id=9051,
+            username="admin-detail",
+            full_name="Admin Detail",
+            is_admin=True,
+        )
+    )
+    db_session.commit()
+    _authenticate_session(
+        client=client,
+        db_session=db_session,
+        stub_peeringdb_client=stub_peeringdb_client,
+        peeringdb_user_id=9051,
+        username="admin-detail",
+        asns=(64552,),
+    )
+
+    detail_response = client.get(f"/api/v1/admin/requests/{request_id}")
+    assert detail_response.status_code == 200
+    detail_body = detail_response.json()["data"]
+    assert detail_body["request"]["id"] == request_id
+    assert detail_body["audit_events"]
 
 
 def test_admin_retry_endpoint_requires_failed_status(
@@ -334,8 +422,9 @@ def test_non_admin_is_rejected_from_admin_routes(
         asns=(64700,),
     )
 
-    admin_page_response = client.get("/admin/requests")
-    assert admin_page_response.status_code == 403
+    admin_list_response = client.get("/api/v1/admin/requests")
+    assert admin_list_response.status_code == 403
+    assert admin_list_response.json()["error"]["code"] == "forbidden"
 
     admin_api_response = client.post(f"/api/v1/admin/requests/{uuid.uuid4()}/approve")
     assert admin_api_response.status_code == 403
@@ -384,6 +473,48 @@ def test_create_request_enforces_associated_network_access(
     assert allowed_response.status_code == 201
 
 
+def test_policy_auto_mode_auto_approves_and_emits_policy_audit(
+    client: TestClient,
+    test_app: FastAPI,
+    workflow_settings: AppSettings,
+    db_session: Session,
+    stub_peeringdb_client: StubPeeringDBClient,
+) -> None:
+    _seed_network(db_session)
+    test_app.state.settings = replace(workflow_settings, workflow_approval_mode="policy_auto")
+    _authenticate_session(
+        client=client,
+        db_session=db_session,
+        stub_peeringdb_client=stub_peeringdb_client,
+        peeringdb_user_id=1801,
+        username="operator-1801",
+        asns=(64801,),
+    )
+
+    create_response = client.post(
+        "/api/v1/requests",
+        json={"asn": 64801, "zt_network_id": "abcdef0123456789"},
+    )
+    assert create_response.status_code == 201
+    created_request = create_response.json()["data"]["request"]
+    assert created_request["status"] == "approved"
+
+    transition_audit = (
+        db_session.execute(
+            select(AuditEvent)
+            .where(AuditEvent.action == "request.status.changed")
+            .order_by(AuditEvent.created_at.desc())
+        )
+        .scalars()
+        .first()
+    )
+    assert transition_audit is not None
+    assert transition_audit.actor_user_id is None
+    assert transition_audit.event_metadata["approval_mode"] == "policy_auto"
+    assert transition_audit.event_metadata["decision_source"] == "policy_auto"
+    assert transition_audit.event_metadata["auto_approved"] is True
+
+
 def _seed_network(db_session: Session, *, network_id: str = "abcdef0123456789") -> None:
     existing = db_session.get(ZtNetwork, network_id)
     if existing is not None:
@@ -401,8 +532,9 @@ def _authenticate_session(
     username: str,
     asns: tuple[int, ...],
 ) -> None:
-    login_response = client.get("/auth/login", follow_redirects=False)
-    state = parse_qs(urlparse(login_response.headers["location"]).query)["state"][0]
+    start_response = client.post("/api/v1/auth/peeringdb/start")
+    start_body = start_response.json()["data"]
+    state = start_body["state"]
     oauth_row = db_session.execute(
         select(OauthStateNonce).where(OauthStateNonce.state == state)
     ).scalar_one()
@@ -422,12 +554,11 @@ def _authenticate_session(
         ),
     )
 
-    callback_response = client.get(
-        f"/auth/callback?code=code-{peeringdb_user_id}&state={state}",
-        follow_redirects=False,
+    callback_response = client.post(
+        "/api/v1/auth/peeringdb/callback",
+        json={"code": f"code-{peeringdb_user_id}", "state": state},
     )
-    assert callback_response.status_code == 302
-    assert callback_response.headers["location"] == "http://testserver/onboarding"
+    assert callback_response.status_code == 200
 
 
 def _unsigned_id_token(payload: dict[str, str]) -> str:

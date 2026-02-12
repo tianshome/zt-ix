@@ -5,10 +5,19 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+ApprovalMode = Literal[
+    "manual_admin",
+    "policy_auto",
+]
+APPROVAL_MODE_MANUAL_ADMIN: ApprovalMode = "manual_admin"
+APPROVAL_MODE_POLICY_AUTO: ApprovalMode = "policy_auto"
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +39,8 @@ class AppSettings:
     local_auth_enabled: bool
     local_auth_password_min_length: int
     local_auth_pbkdf2_iterations: int
+    runtime_config_path: str = "runtime-config.yaml"
+    workflow_approval_mode: ApprovalMode = APPROVAL_MODE_MANUAL_ADMIN
     redis_url: str = "redis://localhost:6379/0"
     zt_provider: str = "central"
     zt_central_base_url: str = "https://api.zerotier.com/api/v1"
@@ -65,6 +76,11 @@ class AppSettings:
         scopes = _normalize_peeringdb_scopes(scopes_raw)
         route_server_hosts = _parse_csv_list(os.getenv("ROUTE_SERVER_HOSTS", ""))
         required_network_ids = _parse_csv_list(os.getenv("ZT_CONTROLLER_REQUIRED_NETWORK_IDS", ""))
+        runtime_config_path = (
+            os.getenv("ZTIX_RUNTIME_CONFIG_PATH", "runtime-config.yaml").strip()
+            or "runtime-config.yaml"
+        )
+        workflow_approval_mode = _resolve_workflow_approval_mode(runtime_config_path)
 
         return cls(
             app_env=app_env,
@@ -77,7 +93,7 @@ class AppSettings:
             peeringdb_client_secret=os.getenv("PEERINGDB_CLIENT_SECRET", ""),
             peeringdb_redirect_uri=os.getenv(
                 "PEERINGDB_REDIRECT_URI",
-                "http://localhost:8000/auth/callback",
+                "http://localhost:5173/auth/callback",
             ),
             peeringdb_authorization_url=os.getenv(
                 "PEERINGDB_AUTHORIZATION_URL",
@@ -102,6 +118,8 @@ class AppSettings:
                 100_000,
                 _env_int("LOCAL_AUTH_PBKDF2_ITERATIONS", 390_000),
             ),
+            runtime_config_path=runtime_config_path,
+            workflow_approval_mode=workflow_approval_mode,
             redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
             zt_provider=os.getenv("ZT_PROVIDER", "central").strip().lower(),
             zt_central_base_url=os.getenv("ZT_CENTRAL_BASE_URL", "https://api.zerotier.com/api/v1"),
@@ -213,6 +231,55 @@ def _parse_csv_list(value: str) -> tuple[str, ...]:
         seen.add(item)
         deduped.append(item)
     return tuple(deduped)
+
+
+def _resolve_workflow_approval_mode(runtime_config_path: str) -> ApprovalMode:
+    configured_mode = _parse_runtime_config_approval_mode(runtime_config_path)
+    normalized_mode = (configured_mode or APPROVAL_MODE_MANUAL_ADMIN).strip().lower()
+
+    if normalized_mode == APPROVAL_MODE_MANUAL_ADMIN:
+        return APPROVAL_MODE_MANUAL_ADMIN
+    if normalized_mode == APPROVAL_MODE_POLICY_AUTO:
+        return APPROVAL_MODE_POLICY_AUTO
+
+    raise ValueError(
+        "unsupported workflow.approval_mode in runtime config: "
+        f"{normalized_mode!r}; expected one of "
+        f"{APPROVAL_MODE_MANUAL_ADMIN!r}, {APPROVAL_MODE_POLICY_AUTO!r}"
+    )
+
+
+def _parse_runtime_config_approval_mode(runtime_config_path: str) -> str | None:
+    path = Path(runtime_config_path)
+    if not path.exists() or not path.is_file():
+        return None
+
+    workflow_indent: int | None = None
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        key = raw_line.lstrip()
+
+        if workflow_indent is None:
+            if key.startswith("workflow:"):
+                workflow_indent = indent
+            continue
+
+        if indent <= workflow_indent:
+            workflow_indent = None
+            if key.startswith("workflow:"):
+                workflow_indent = indent
+            continue
+
+        if key.startswith("approval_mode:"):
+            raw_value = key.partition(":")[2]
+            value = raw_value.split("#", 1)[0].strip().strip("'\"")
+            return value or None
+
+    return None
 
 
 @lru_cache(maxsize=1)

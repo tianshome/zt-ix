@@ -1,6 +1,6 @@
 # Implementation Plan
-Version: 1.8
-Date: 2026-02-11
+Version: 1.9
+Date: 2026-02-12
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
 
@@ -9,22 +9,21 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - `[ ]` open and not yet implemented.
 - `[ ]` + `Blocked by` + `Reason` marks an explicitly blocked gap that must be revisited when the dependency is complete.
 
-## 0.1 Current Status Snapshot (through Phase 8 implementation)
+## 0.1 Current Status Snapshot (through Phase 9 implementation)
 - [x] Phase 1 bootstrap is complete.
 - [x] Phase 2 data/migration foundation is complete.
 - [x] Phase 3 auth integration (Auth Option A + Auth Option B) is complete for automated coverage.
-- [x] Phase 4 backend request workflow is complete for API + JSON route responses.
+- [x] Phase 4 backend request workflow is complete for API responses.
 - [x] Phase 5 provider foundation and membership provisioning is complete (Step 5.1 to Step 5.8).
 - [x] Phase 6 route-server desired config generation is complete (Step 6.1 to Step 6.3).
-- [ ] Configurable approval mode is planned but not implemented.
-  - Blocked by: Phase 9 Step 9.4 to Step 9.5.
-  - Reason: runtime-config approval-mode wiring and `policy_auto` transition behavior are not implemented yet.
+- [x] Configurable approval mode is implemented from runtime config (`manual_admin` / `policy_auto`).
 - [x] Queue placeholder has been replaced with real async dispatch.
 - [ ] SPA frontend integration for onboarding/dashboard/request/admin flows.
   - Blocked by: Phase 10 Step 10.1 to Step 10.5 and Phase 11 Step 11.1 to Step 11.6.
   - Reason: SPA runtime foundation and core workflow screens are not implemented yet.
 - [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
 - [x] Self-hosted controller lifecycle ownership is implemented for planned scope (Phase 8 Step 8.1 to Step 8.5).
+- [x] Phase 9 API realignment for SPA and approval-mode config is complete.
 
 ## 1. Planning Assumptions and Open Questions
 - [x] Assumption: manual admin approval is the default decision control.
@@ -105,15 +104,15 @@ Verification:
 Implements: PRD `F1`, part of `F2`, `F6`, `F7`.
 
 Steps:
-- [x] Step 3.1: Keep `/auth/login` with state/nonce/PKCE generation (Auth Option B).
-- [x] Step 3.2: Keep `/auth/callback` token exchange + state/nonce validation (Auth Option B).
+- [x] Step 3.1: Keep OAuth start flow with state/nonce/PKCE generation (Auth Option B).
+- [x] Step 3.2: Keep OAuth callback token exchange + state/nonce validation (Auth Option B).
 - [x] Step 3.3: Upsert canonical `app_user` and fetch authorized ASN/network context from PeeringDB.
 - [x] Step 3.4: Extend schema for Auth Option A:
   - add `local_credential`
   - add `user_network_access`
   - make `app_user.peeringdb_user_id` nullable while preserving uniqueness when present
 - [x] Step 3.5: Implement local credential repository + password hashing/verification service.
-- [x] Step 3.6: Implement `/auth/local/login` with deterministic auth failures and audit events.
+- [x] Step 3.6: Implement local login flow with deterministic auth failures and audit events.
 - [x] Step 3.7: Implement server CLI user provisioning command(s) with options:
   - username/password input mode
   - `--admin` (optional)
@@ -144,15 +143,13 @@ Implements: PRD `F2`, `F3`, `F5`, `F6`.
 Steps:
 - [x] Step 4.1: Implement request creation endpoint with ASN ownership and duplicate protections.
 - [x] Step 4.2: Enforce associated-network checks for users with configured `user_network_access`.
-- [x] Step 4.3: Build operator dashboard and request detail route handlers (current response mode: JSON payloads).
+- [x] Step 4.3: Build operator workflow data handlers for dashboard/detail use cases (now API-only after phase 9 realignment).
 - [x] Step 4.4: Build admin queue/detail and approve/reject/retry APIs with role checks.
 - [x] Step 4.5: Emit audit events for all workflow state transitions.
 - [x] Step 4.6: Add API and JSON-route tests for transitions, conflict handling, and associated-network authorization failures.
-- [ ] Step 4.7: Add configurable approval mode support:
+- [x] Step 4.7: Add configurable approval mode support:
   - `manual_admin` (default): keep current admin decision path.
   - `policy_auto`: auto-transition policy-eligible `pending` requests to `approved` with explicit audit metadata.
-  - Blocked by: Phase 9 Step 9.4 to Step 9.5.
-  - Reason: runtime-config approval-mode wiring and SPA/API realignment work are scheduled in phase 9.
 - [x] Queueing placeholder retained for defer-to-phase-5 behavior (`_enqueue_provisioning_attempt`).
 - [x] Replace queueing placeholder with real Celery task dispatch.
 - [ ] Integrate React/TypeScript/shadcn-ui frontend workflow pages for operator/admin routes.
@@ -160,11 +157,9 @@ Steps:
   - Reason: SPA runtime foundation and workflow UI implementation are intentionally deferred to dedicated frontend phases.
 
 Exit criteria:
-- [x] Operator can submit request and track state via API and JSON route responses.
+- [x] Operator can submit request and track state via API responses.
 - [x] Admin can approve/reject/retry with proper validation and auditing.
-- [ ] Approval mode is configurable (`manual_admin` default, `policy_auto` optional) with auditable decision outcomes.
-  - Blocked by: Step 4.7.
-  - Reason: policy evaluation path is not implemented yet.
+- [x] Approval mode is configurable (`manual_admin` default, `policy_auto` optional) with auditable decision outcomes.
 - [x] Admin approval/retry triggers async provisioning dispatch.
 - [ ] Operator/admin rendered UI pages match frontend guidelines.
   - Blocked by: Phase 10 Step 10.1 to Step 10.5 and Phase 11 Step 11.1 to Step 11.6.
@@ -173,9 +168,7 @@ Exit criteria:
 Verification:
 - [x] `pytest tests/workflow -q`
 - [x] Automated checks for duplicate conflict, reject-without-reason, and associated-network restrictions.
-- [ ] Automated checks for approval-mode behavior (`manual_admin` and `policy_auto`) and audit emission.
-  - Blocked by: Step 4.7.
-  - Reason: configurable approval-mode logic is not implemented yet.
+- [x] Automated checks for approval-mode behavior (`manual_admin` and `policy_auto`) and audit emission.
 - [ ] Manual UI checks for rendered pages.
   - Blocked by: Phase 11 Step 11.1 to Step 11.6.
   - Reason: SPA workflow screens are not implemented yet.
@@ -317,34 +310,34 @@ Implements: PRD `F1`, `F2`, `F3`, `F5`, SPA/API contract decisions.
 Goal: provide complete JSON API surface for SPA and remove redirect/page assumptions from backend workflows before frontend implementation starts.
 
 Steps:
-- [ ] Step 9.1: Add SPA auth APIs:
+- [x] Step 9.1: Add SPA auth APIs:
   - `POST /api/v1/auth/peeringdb/start`
   - `POST /api/v1/auth/peeringdb/callback`
   - `POST /api/v1/auth/local/login`
   - `POST /api/v1/auth/logout`
-- [ ] Step 9.2: Add SPA workflow data APIs:
+- [x] Step 9.2: Add SPA workflow data APIs:
   - `GET /api/v1/onboarding/context`
   - `GET /api/v1/admin/requests`
   - `GET /api/v1/admin/requests/{request_id}`
-- [ ] Step 9.3: Remove backend `/error` page contract and backend workflow page-route dependence for SPA flows.
-- [ ] Step 9.4: Parse `workflow.approval_mode` from `runtime-config.yaml` (`manual_admin` default, `policy_auto` optional).
-- [ ] Step 9.5: Implement approval-mode behavior with current validation scope:
+- [x] Step 9.3: Remove backend `/error` page contract and backend workflow page-route dependence for SPA flows.
+- [x] Step 9.4: Parse `workflow.approval_mode` from `runtime-config.yaml` (`manual_admin` default, `policy_auto` optional).
+- [x] Step 9.5: Implement approval-mode behavior with current validation scope:
   - keep existing ASN/network eligibility checks as authoritative,
   - do not add additional policy guardrails in `v0.1.0`,
   - emit explicit audit metadata for auto-approved decisions.
-- [ ] Step 9.6: Add/adjust automated tests for JSON auth callbacks, onboarding context, admin list/detail APIs, and approval-mode behavior.
-- [ ] Step 9.7: Remove legacy redirect-style auth routes and compatibility behavior and clean up FastAPI-related modules.
+- [x] Step 9.6: Add/adjust automated tests for JSON auth callbacks, onboarding context, admin list/detail APIs, and approval-mode behavior.
+- [x] Step 9.7: Remove legacy redirect-style auth routes and compatibility behavior and clean up FastAPI-related modules.
 
 Exit criteria:
-- [ ] SPA-required auth/workflow/admin APIs exist and are test-covered.
-- [ ] Approval mode is runtime-configurable from `runtime-config.yaml`.
-- [ ] Backend no longer relies on server error page redirects for user-facing auth errors.
+- [x] SPA-required auth/workflow/admin APIs exist and are test-covered.
+- [x] Approval mode is runtime-configurable from `runtime-config.yaml`.
+- [x] Backend no longer relies on server error page redirects for user-facing auth errors.
 
 Verification:
-- [ ] `pytest tests/auth -q`
-- [ ] `pytest tests/auth_local -q`
-- [ ] `pytest tests/workflow -q`
-- [ ] Approval-mode tests cover `manual_admin` and `policy_auto` outcomes.
+- [x] `pytest tests/auth -q`
+- [x] `pytest tests/auth_local -q`
+- [x] `pytest tests/workflow -q`
+- [x] Approval-mode tests cover `manual_admin` and `policy_auto` outcomes.
 
 ## 12. Phase 10: SPA Platform and Delivery Topology
 Implements: PRD SPA runtime scope and frontend stack requirements.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.config import AppSettings
@@ -75,3 +77,41 @@ def test_from_env_reads_provisioning_provider_settings(monkeypatch: pytest.Monke
     assert settings.zt_controller_backup_dir == "/var/backups/zt-ix-controller"
     assert settings.zt_controller_backup_retention_count == 21
     assert settings.zt_controller_state_dir == "/var/lib/zerotier-one"
+
+
+def test_from_env_reads_workflow_approval_mode_from_runtime_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    runtime_config = tmp_path / "runtime-config.yaml"
+    runtime_config.write_text("workflow:\n  approval_mode: policy_auto\n")
+    monkeypatch.setenv("ZTIX_RUNTIME_CONFIG_PATH", str(runtime_config))
+
+    settings = AppSettings.from_env()
+
+    assert settings.runtime_config_path == str(runtime_config)
+    assert settings.workflow_approval_mode == "policy_auto"
+
+
+def test_from_env_defaults_workflow_approval_mode_when_runtime_config_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    runtime_config = tmp_path / "missing-runtime-config.yaml"
+    monkeypatch.setenv("ZTIX_RUNTIME_CONFIG_PATH", str(runtime_config))
+
+    settings = AppSettings.from_env()
+
+    assert settings.workflow_approval_mode == "manual_admin"
+
+
+def test_from_env_rejects_invalid_workflow_approval_mode(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    runtime_config = tmp_path / "runtime-config.yaml"
+    runtime_config.write_text("workflow:\n  approval_mode: maybe_later\n")
+    monkeypatch.setenv("ZTIX_RUNTIME_CONFIG_PATH", str(runtime_config))
+
+    with pytest.raises(ValueError, match="workflow.approval_mode"):
+        AppSettings.from_env()
