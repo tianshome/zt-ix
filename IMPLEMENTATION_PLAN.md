@@ -461,9 +461,7 @@ Verification:
 - [x] `npm run build` (inside `frontend/`)
 - [x] Manual SPA walkthrough for auth -> onboarding -> request detail -> admin decision/retry.
 - [x] Manual polling check confirms status transition visibility without full page refresh.
-- [ ] Manual table check confirms operator/admin request list rows display assigned IPv6 values from API.
-  - Blocked by: interactive browser runtime unavailable in this execution environment.
-  - Reason: browser interaction is required for final UI table validation.
+- [x] Manual table check confirms operator/admin request list rows display assigned IPv6 values from API.
 
 ## 14. Phase 12: Frontend MVP Validation and Deferred UX Scope
 Implements: final frontend quality gate for `v0.1.0`.
@@ -478,9 +476,6 @@ Blocked items:
 - [ ] Automated accessibility tooling gate for CI.
   - Blocked by: Post-`v0.1.0` frontend hardening phase.
   - Reason: accessibility automation is explicitly deferred beyond `v0.1.0`.
-- [ ] Internationalized error/status message catalogs.
-  - Blocked by: Post-`v0.1.0` frontend hardening phase.
-  - Reason: i18n is explicitly deferred beyond `v0.1.0`.
 
 Exit criteria:
 - [ ] MVP SPA flows pass integration smoke checks.
@@ -568,12 +563,9 @@ Steps:
 - [ ] Step 18.1: Add automated accessibility tooling and CI gates (keyboard flow, contrast checks, semantic status cues).
   - Blocked by: Phase 14 completion.
   - Reason: MVP release scope explicitly defers accessibility automation.
-- [ ] Step 18.2: Add i18n framework and translated error/status message catalogs.
-  - Blocked by: Phase 14 completion.
-  - Reason: MVP release scope explicitly defers localization.
-- [ ] Step 18.3: Improve data-heavy table UX at scale (virtualization/pagination persistence/mobile-specific layouts).
+- [ ] Step 18.2: Improve data-heavy table UX at scale (virtualization/pagination persistence/mobile-specific layouts).
   - Blocked by: Phase 14 completion.
   - Reason: MVP release scope accepts baseline shadcn/Radix table behavior.
-- [ ] Step 18.4: Add enhanced audit-event timeline presentation patterns for operator/admin detail views.
+- [ ] Step 18.3: Add enhanced audit-event timeline presentation patterns for operator/admin detail views.
   - Blocked by: Phase 14 completion.
   - Reason: MVP release scope focuses on functional workflow completion.
