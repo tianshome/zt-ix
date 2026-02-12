@@ -1,5 +1,5 @@
 # Application Flow
-Version: 0.9
+Version: 1.0
 Date: 2026-02-12
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `FRONTEND_GUIDELINES.md`, `IMPLEMENTATION_PLAN.md`
@@ -215,4 +215,20 @@ Error branch:
 4. Empty ASN eligibility: show why onboarding is blocked and how to get support.
 5. Local login failure: show non-enumerating invalid-credential message.
 6. Server `/error` page is not used; error messaging is frontend-owned.
-7. i18n for error messages is explicitly deferred to a later phase.
+7. Error/status copy is localized through frontend message catalogs (i18n-enabled) instead of hard-coded route text.
+
+## 14. Localization and Branding Contract
+1. Locale detection order:
+   - first supported locale in `navigator.languages`,
+   - fallback to `navigator.language`,
+   - fallback to first configured locale when no supported match exists.
+2. Locale switcher:
+   - available in persistent shell/header UI,
+   - shows at least `en-US`, `zh-CN`, `he` with flag emoji labels,
+   - user selection overrides auto-detection for the active session/profile preference.
+3. Right-to-left behavior:
+   - selecting `he` applies document/SPA RTL direction handling.
+4. UX copy contract:
+   - user-visible labels and helper text must avoid internal implementation jargon (for example phase/step terminology).
+5. Branding contract:
+   - app name/logo/support/github URL are sourced from a compile-time branding configuration file consumed by frontend build.

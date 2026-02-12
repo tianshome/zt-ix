@@ -1,5 +1,5 @@
 # Product Requirements Document (PRD)
-Version: 0.7
+Version: 0.8
 Date: 2026-02-12
 Product: ZT Internet Exchange (ZT-IX) Controller
 
@@ -44,6 +44,12 @@ Virtual IX onboarding is often manual and inconsistent. Operators need a standar
    - Python reads controller node ID prefix (first 10 hex characters) from controller API metadata at runtime.
    - Runtime configuration stores only 6-character network suffixes.
    - Full 16-character network IDs are composed in backend logic to avoid repeated full-ID literals and drift.
+14. MVP localized frontend UX:
+   - language-aware interface and error/status messaging for `en-US`, `zh-CN`, and `he`,
+   - browser/device language matching with deterministic fallback behavior,
+   - user-selectable language override from SPA UI.
+15. Build-time branding configuration for SPA compile:
+   - app identity fields (name/short name/logo/support link/social footer) sourced from compile-time config file.
 
 ## 5. Out of Scope (Non-Goals)
 1. Full multi-vendor BGP lifecycle orchestration beyond documented BIRD route-server Option A workflow.
@@ -52,7 +58,7 @@ Virtual IX onboarding is often manual and inconsistent. Operators need a standar
 4. Multi-cloud overlay orchestration outside ZeroTier.
 5. Additional identity providers beyond PeeringDB OAuth and Auth Option A local credentials in phase 1.
 6. Automated deployment/management of custom ZeroTier roots/planet infrastructure beyond the documented controller lifecycle ownership baseline.
-7. Full i18n and advanced accessibility hardening beyond MVP for `v0.1.0`.
+7. Advanced localization expansion beyond `en-US`, `zh-CN`, and `he`, plus full accessibility hardening beyond MVP for `v0.1.0`.
 
 ## 6. User Stories
 1. As an operator, I can log in with PeeringDB so I do not create a separate identity.
@@ -65,6 +71,8 @@ Virtual IX onboarding is often manual and inconsistent. Operators need a standar
 8. As an auditor, I can view immutable logs of key actions.
 9. As an admin, I can confirm route-server desired config was generated and synced for approved requests.
 10. As an operations owner, I can verify controller readiness, rotate controller credentials, and execute backup/restore workflows with auditable outcomes.
+11. As an operator, I can use the interface in my language when English is not my preferred language.
+12. As an operator, I can switch language manually without changing browser settings.
 
 ## 7. Roles and Permissions
 1. Operator:
@@ -155,6 +163,16 @@ Acceptance criteria:
 5. Release sign-off confirms self-hosted-only operation without dependency on ZeroTier Central credentials.
 6. Required network reconciliation uses suffix-only configuration (`required_network_suffixes`) and runtime controller-prefix discovery.
 
+### F10. Localized UI and Build-Time Branding (MVP)
+Acceptance criteria:
+1. Frontend attempts to match browser/device language and falls back to the first configured locale if no supported match exists.
+2. Translation catalogs are centralized and maintainable using `react-i18next`.
+3. Language switcher is visible in the SPA shell and lists `en-US`, `zh-CN`, and `he` with flag emoji labels.
+4. Hebrew (`he`) mode applies right-to-left directionality for shell/layout/text alignment.
+5. Status and error messages shown in UI come from locale catalogs, not hard-coded inline strings.
+6. User-facing copy is plain-language and avoids internal phase/implementation terminology.
+7. SPA branding fields are sourced from a compile-time configuration file so environment-specific builds can customize identity text/assets.
+
 ## 9. Non-Functional Requirements
 1. Reliability:
    - Provisioning jobs are retry-safe and idempotent.
@@ -207,3 +225,4 @@ Acceptance criteria:
 7. Route-server desired config rendering and SSH fanout path have automated tests.
 8. Owned self-hosted controller lifecycle paths (bootstrap/readiness, network reconciliation, token lifecycle, backup/restore validation) are implemented, audited, and test-backed.
 9. SPA build/runtime delivery is implemented with NGINX frontend container and API reverse proxy wiring in production compose profile.
+10. MVP localization (`en-US`, `zh-CN`, `he`) and compile-time branding configuration are implemented and test-validated.

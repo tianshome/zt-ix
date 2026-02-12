@@ -1,6 +1,45 @@
 ZT-IX Brainstorming Progress
 Date: 2026-02-10
 
+---
+
+Update: 2026-02-12 (Documentation-only: Phase 11 i18n + UX copy cleanup + build-time branding scope)
+
+Completed
+1. Added new open checklist item in `IMPLEMENTATION_PLAN.md`:
+   - Step `11.8` for internationalized UI and error/status message catalogs using `react-i18next`.
+2. Expanded Step `11.8` implementation details in the plan:
+   - browser/device language matching with deterministic fallback to first configured locale,
+   - initial locales `en-US`, `zh-CN`, `he`,
+   - language switcher dropdown with flag emojis,
+   - RTL requirement for Hebrew,
+   - UX copy cleanup requirement to remove internal engineering language from user-facing text,
+   - compile-time branding configuration file requirement for SPA builds.
+3. Updated related source-of-truth docs for scope alignment:
+   - `PRD.md`: added MVP localization + compile-time branding as in-scope (`F10`) and adjusted non-goals to defer only advanced localization.
+   - `APP_FLOW.md`: replaced i18n deferral note with localization contract and added language/RTL/branding behavior contract.
+   - `TECH_STACK.md`: added approved frontend i18n libraries (`i18next`, `react-i18next`) and compile-time branding config note.
+   - `FRONTEND_GUIDELINES.md`: added localization/copywriting/RTL/font-coverage rules and build-time branding config guidance.
+4. Updated implementation-plan traceability and Phase 12 deferred-scope wording so only advanced localization remains deferred.
+
+In progress
+1. No code implementation in this update (docs-only).
+
+Next
+1. Implement Phase 11 Step `11.8` in frontend code:
+   - translation catalogs,
+   - language switcher UI,
+   - locale detection + fallback,
+   - RTL handling for `he`,
+   - compile-time branding config wiring.
+2. Add/manual-run verification checks listed under Phase 11 for locale detection, RTL rendering, and branding compile outputs.
+
+Known bugs / regressions
+1. None identified in this documentation-only scope.
+
+Notes
+1. This update intentionally does not modify application code or dependency lockfiles.
+
 What I looked up
 1. PeeringDB OAuth/OIDC docs:
    - https://docs.peeringdb.com/howto/oauth/

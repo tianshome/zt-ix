@@ -1,5 +1,5 @@
 # Frontend Guidelines
-Version: 0.3
+Version: 0.4
 Date: 2026-02-12
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `IMPLEMENTATION_PLAN.md`
@@ -23,6 +23,9 @@ Marble-inspired operational console aesthetic with a plain white/light main inte
    - `body-lg`: 18px / 28px / 400
    - `body`: 16px / 24px / 400
    - `caption`: 13px / 18px / 500
+4. Locale font coverage:
+   - `zh-CN`: keep CJK-safe rendering with Noto family coverage (`Noto Sans`, `Noto Sans SC` fallback where needed).
+   - `he`: keep Hebrew glyph coverage with Noto family fallback and preserve readability under RTL layouts (`Noto Sans Hebrew`).
 
 ## 3. Marble Palette Tokens
 Use these color tokens as the canonical frontend palette:
@@ -103,3 +106,26 @@ Use these color tokens as the canonical frontend palette:
 ## 11. Accessibility Scope
 1. `v0.1.0` scope: readable status text and visible keyboard focus on critical controls.
 2. Full a11y hardening (contrast audits, automated tooling gates, deep screen-reader QA) is deferred post-`v0.1.0`.
+
+## 12. Localization and Copywriting Scope (MVP)
+1. Required locales for `v0.1.0`: `en-US`, `zh-CN`, `he`.
+2. Translation source must use centralized catalog keys with `react-i18next` and public/locales files; avoid ad-hoc inline string translation logic.
+3. Browser/device language match behavior:
+   - attempt `navigator.languages`,
+   - then `navigator.language`,
+   - fallback to first configured language.
+4. Provide a visible language switcher dropdown in the persistent header with flag emoji labels for all supported locales.
+5. `he` locale must enable RTL directionality in app shell and page-level layout primitives.
+6. User-facing copy must use plain language and avoid internal implementation terms (for example avoid labels like `Phase 11 workflow routes` in UI text).
+
+## 13. Build-Time Branding Configuration
+1. Frontend build must consume branding values from a compile-time config file.
+2. Minimum configurable branding fields:
+   - app name,
+   - short name,
+   - logo/icon path,
+   - support/contact URL,
+   - optional footer Github URL.
+3. Screen text and branding text are separate concerns:
+   - localization catalogs manage translatable UI copy,
+   - branding config manages deployment-specific identity fields.

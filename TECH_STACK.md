@@ -1,6 +1,6 @@
 # Technical Stack
-Version: 0.7
-Date: 2026-02-11
+Version: 0.8
+Date: 2026-02-12
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 
@@ -35,7 +35,9 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 4. Vite `7.3.1`
 5. shadcn-ui CLI `3.8.4`
 6. npm `11.10.0`
-7. Production frontend runtime: NGINX web container serving SPA static assets and proxying API requests to FastAPI container.
+7. i18next `24.2.1`
+8. react-i18next `15.4.0`
+9. Production frontend runtime: NGINX web container serving SPA static assets and proxying API requests to FastAPI container.
 
 ## 7. Security and Config
 1. python-dotenv 1.0.1
@@ -66,6 +68,7 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 3. Application processes run directly with `uv run` (API server, worker, and tests), not inside Docker by default.
 4. Full-container application runtime is reserved for parity checks and release validation, not the default inner-loop workflow.
 5. Frontend development runs with Vite dev server and proxy-to-backend API routes (`localhost:8000`).
+6. Frontend compile supports a branding configuration file (Vite build input) for environment-specific app identity fields.
 
 ## 10. External Integrations (Authoritative Endpoints and Auth)
 1. PeeringDB OAuth2 endpoints:

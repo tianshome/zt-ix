@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 2.5
+Version: 2.6
 Date: 2026-02-12
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -61,7 +61,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] PRD `F9` maps to phase 8 and phase 14 release gates.
 - [x] PRD `F6` and `F7` map to phases 3, 4, 5, 6, 7, 8, and 13.
 - [x] SPA delivery and frontend UX requirements map to phases 9, 10, 11, and 12.
-- [x] Accessibility/i18n hardening beyond MVP is deferred post-`v0.1.0`.
+- [x] Initial i18n/localized UX scope is in Phase 11.
 - [x] Release and operational requirements map to phase 14.
 - [x] Route-server orchestration extension (Route Server Option A) maps to phases 6, 7, and 14 validation.
 
@@ -439,6 +439,14 @@ Steps:
     - show assigned IPv6 from API/SQL-backed request association in dashboard/admin request list rows,
     - display deterministic fallback (`unassigned`) when request has no assigned IPv6 yet,
     - keep table behavior within existing MVP shadcn/Radix table patterns.
+- [ ] Step 11.8: Internationalized SPA text/message catalogs, language switcher, and build-time branding configuration.
+  - Minimum behaviors:
+    - detect preferred language from browser/device (`navigator.languages`, then `navigator.language`), choose the first supported locale, and fall back to the first configured locale when no match exists,
+    - implement centralized translation catalogs with `react-i18next` for navigation labels, page titles, forms, statuses, and API-facing error/status message text,
+    - ship initial locales: `en-US` (source/default), `zh-CN` (Simplified Chinese with Noto-compatible glyph coverage), and `he` (Hebrew with right-to-left layout support),
+    - add a persistent language switcher dropdown in the app header using flag emoji labels (`🇺🇸`, `🇨🇳`, `🇮🇱`, etc.) plus localized language names,
+    - clean up user-facing copy to remove internal/engineering wording (for example, replace technical labels with plain-language terms such as `Request status` and `Request history`),
+    - add compile-time branding configuration file support (for example app name, short name, logo path, support URL, and footer text) consumed by the frontend build.
 
 Blocked items:
 - [ ] Large-scale table optimization (virtualization, advanced sort persistence, server-driven pagination tuning).
@@ -456,12 +464,17 @@ Exit criteria:
 - [x] Status updates are visible via HTTP polling without manual page reloads.
 - [x] Core request/admin actions are available from SPA screens.
 - [x] Operator/admin request list tables show assigned IPv6 when available.
+- [ ] SPA supports localized interface/error/status messages for `en-US`, `zh-CN`, and `he` with browser-language matching and manual language override.
+- [ ] Frontend build can apply environment-specific branding values from compile-time configuration.
 
 Verification:
 - [x] `npm run build` (inside `frontend/`)
 - [x] Manual SPA walkthrough for auth -> onboarding -> request detail -> admin decision/retry.
 - [x] Manual polling check confirms status transition visibility without full page refresh.
 - [x] Manual table check confirms operator/admin request list rows display assigned IPv6 values from API.
+- [ ] Manual locale checks for auto-detected language fallback and header language-switcher overrides.
+- [ ] Manual RTL check for `he` confirms directionality and layout integrity on `/login`, `/onboarding`, `/dashboard`, and `/admin/requests`.
+- [ ] Manual branding check confirms compile-time config values render in app shell/header/footer.
 
 ## 14. Phase 12: Frontend MVP Validation and Deferred UX Scope
 Implements: final frontend quality gate for `v0.1.0`.
@@ -470,7 +483,7 @@ Goal: validate shipped SPA behavior while explicitly tracking deferred frontend 
 Steps:
 - [ ] Step 12.1: Add frontend/API integration smoke tests for login, request creation, admin decision, and retry flows.
 - [ ] Step 12.2: Validate MVP responsive behavior on target breakpoints (`sm`, `md`, `lg`) for onboarding/dashboard/admin queue screens.
-- [ ] Step 12.3: Document deferred frontend scope items (full accessibility hardening, i18n, advanced mobile/table optimization) in release checklist.
+- [ ] Step 12.3: Document deferred frontend scope items (advanced localization expansion, full accessibility hardening, advanced mobile/table optimization) in release checklist.
 
 Blocked items:
 - [ ] Automated accessibility tooling gate for CI.
