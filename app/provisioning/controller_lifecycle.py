@@ -218,12 +218,6 @@ class SelfHostedControllerLifecycleManager:
             ),
         )
 
-        controller_payload = _parse_json_object(
-            controller_response,
-            error_cls=ControllerReadinessError,
-            message_prefix="controller metadata response was not a JSON object",
-            remediation="verify controller API compatibility and token scope",
-        )
         controller_id = _extract_non_empty_str(status_response.json(), "address")
         return ControllerReadinessResult(
             status_probe_code=status_response.status_code,
