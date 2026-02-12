@@ -1355,3 +1355,36 @@ Next
 Known bugs / regressions
 1. No new regressions detected in this follow-up verification pass.
 2. `npm ci` reports non-blocking `EBADENGINE` warning because host npm is `10.8.2` while workspace metadata targets npm `11.10.0`.
+
+---
+
+Update: 2026-02-12 (Frontend design guideline direction realignment)
+
+Completed
+1. Updated `FRONTEND_GUIDELINES.md` visual system to a marble-inspired operational console direction with plain white/light primary surfaces.
+2. Replaced typography guidance with:
+   - `Noto Sans` as primary UI typeface.
+   - `Noto Sans Mono` for `asn`, `zt_network_id`, `node_id`, and request IDs.
+3. Replaced legacy color palette with canonical marble tokens:
+   - surface (`paperWhite`, `softWhite`)
+   - stone (`mistBlue`, `powderBlue`, `blueFog`)
+   - depth (`graphiteSlate`, `deepTealSlate`, `harborBlue`)
+   - vein accents (`clay`, `taupe`)
+4. Added explicit color/surface behavior constraints:
+   - warm-beige accents as primary accent system (target under ~10% of visible UI),
+   - blue reserved for small intentional emphasis only,
+   - light-first surfaces, subtle mineral gradients on secondary areas, thin borders, and soft shadows.
+5. Aligned component-level guidance (buttons, status badges, tables, forms) with the new token and accent usage model to remove conflicting legacy color directives.
+
+Verification
+1. Manual document review confirms prior `Sora`/`Source Sans 3`/`IBM Plex Mono` and legacy palette tokens were removed from `FRONTEND_GUIDELINES.md`.
+2. Manual document review confirms required visual-direction, typography, marble-token, and color/surface behavior sections are present.
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Apply the updated tokens and typography in Phase 11 SPA screen implementation work.
+
+Known bugs / regressions
+1. None identified for this documentation-only update.
