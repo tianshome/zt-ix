@@ -1608,3 +1608,31 @@ Next
 
 Known bugs / regressions
 1. No new regressions detected from Step 8.6 implementation scope.
+
+---
+
+Update: 2026-02-12 (Phase 8 preflight SQL network-id reconciliation)
+
+Completed
+1. Updated `run_controller_lifecycle_preflight` in `app/provisioning/controller_lifecycle.py` to sync `zt_network` rows after successful controller network reconciliation.
+2. Added lifecycle DB sync behavior:
+   - upsert required reconciled network IDs (`existing_network_ids + created_network_ids`) into `zt_network`,
+   - force required rows to active,
+   - delete stale non-required `zt_network` rows.
+3. Added fail-closed reconciliation error handling for SQL sync failures (integrity/DB errors) so preflight does not silently keep drift.
+4. Added regression coverage in `tests/controller_lifecycle/test_lifecycle.py`:
+   - `test_preflight_syncs_zt_network_rows_to_reconciled_ids` verifies stale-row pruning and required-row upsert behavior.
+
+Verification
+1. `uv run pytest tests/controller_lifecycle/test_lifecycle.py -q` passed.
+2. `uv run ruff check app/provisioning/controller_lifecycle.py tests/controller_lifecycle/test_lifecycle.py` passed.
+3. `uv run mypy app/provisioning/controller_lifecycle.py tests/controller_lifecycle/test_lifecycle.py` passed.
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Optionally run full lifecycle + provisioning suites to validate no downstream behavior regressions.
+
+Known bugs / regressions
+1. None identified in this scoped change.

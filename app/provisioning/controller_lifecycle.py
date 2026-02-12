@@ -13,9 +13,12 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import AppSettings
+from app.db.models import ZtNetwork
 from app.provisioning.controller_auth import (
     read_controller_auth_token_file,
     resolve_controller_auth_token,
@@ -221,7 +224,7 @@ class SelfHostedControllerLifecycleManager:
             message_prefix="controller metadata response was not a JSON object",
             remediation="verify controller API compatibility and token scope",
         )
-        controller_id = _extract_non_empty_str(controller_payload, "id")
+        controller_id = _extract_non_empty_str(status_response.json(), "address")
         return ControllerReadinessResult(
             status_probe_code=status_response.status_code,
             controller_probe_code=controller_response.status_code,
@@ -748,6 +751,13 @@ def run_controller_lifecycle_preflight(
         network_reconcile = manager.reconcile_required_networks(
             required_network_ids=network_derivation.required_network_ids
         )
+        reconciled_network_ids = (
+            network_reconcile.existing_network_ids + network_reconcile.created_network_ids
+        )
+        _sync_reconciled_network_ids_to_db(
+            db_session=db_session,
+            reconciled_network_ids=reconciled_network_ids,
+        )
     except ControllerLifecycleError as exc:
         _audit_lifecycle_event(
             audit_repo=audit_repo,
@@ -1032,6 +1042,76 @@ def _audit_lifecycle_event(
         actor_user_id=actor_user_id,
         metadata=metadata,
     )
+
+
+def _sync_reconciled_network_ids_to_db(
+    *,
+    db_session: Session,
+    reconciled_network_ids: tuple[str, ...],
+) -> None:
+    stale_remediation = (
+        "remove stale network references (join_request/zt_membership) or align "
+        "required network configuration before re-running preflight"
+    )
+    sync_remediation = (
+        "verify database availability and zt_network row integrity before "
+        "re-running preflight"
+    )
+    reconcile_set = set(reconciled_network_ids)
+    if len(reconcile_set) != len(reconciled_network_ids):
+        duplicates = sorted(
+            network_id
+            for network_id in reconcile_set
+            if reconciled_network_ids.count(network_id) > 1
+        )
+        raise ControllerNetworkReconciliationError(
+            (
+                "duplicate network ids detected while syncing lifecycle reconciliation "
+                f"results to SQL DB: {', '.join(duplicates)}"
+            ),
+            remediation=(
+                "verify required_network_ids/required_network_suffixes expansion produces "
+                "a unique network id set"
+            ),
+        )
+
+    try:
+        with db_session.begin_nested():
+            db_network_rows = list(
+                db_session.execute(select(ZtNetwork)).scalars()
+            )
+            db_rows_by_id = {row.id: row for row in db_network_rows}
+
+            for network_id in reconciled_network_ids:
+                existing_row = db_rows_by_id.pop(network_id, None)
+                if existing_row is None:
+                    db_session.add(
+                        ZtNetwork(
+                            id=network_id,
+                            name=f"ZT Network {network_id}",
+                            is_active=True,
+                        )
+                    )
+                    continue
+                existing_row.is_active = True
+
+            for stale_row in db_rows_by_id.values():
+                db_session.delete(stale_row)
+
+            db_session.flush()
+    except IntegrityError as exc:
+        raise ControllerNetworkReconciliationError(
+            (
+                "failed to synchronize controller network reconciliation result to SQL DB; "
+                "stale network rows are still referenced"
+            ),
+            remediation=stale_remediation,
+        ) from exc
+    except SQLAlchemyError as exc:
+        raise ControllerNetworkReconciliationError(
+            "failed to synchronize controller network reconciliation result to SQL DB",
+            remediation=sync_remediation,
+        ) from exc
 
 
 def _error_metadata(exc: ControllerLifecycleError) -> dict[str, Any]:

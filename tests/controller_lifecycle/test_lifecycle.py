@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import AuditEvent
+from app.db.models import AuditEvent, ZtNetwork
 from app.provisioning.controller_lifecycle import (
     ControllerLifecycleGateError,
     ControllerRestoreError,
@@ -120,6 +120,57 @@ def test_network_reconciliation_creates_missing_required_network(
     assert result.network_reconcile.existing_network_ids == (existing,)
     assert result.network_reconcile.created_network_ids == (missing,)
     assert ("POST", f"/controller/network/{missing}") in seen
+
+
+def test_preflight_syncs_zt_network_rows_to_reconciled_ids(
+    db_session: Session,
+    tmp_path: Path,
+) -> None:
+    stale = "1111111111111111"
+    existing = "abcdef0123456789"
+    missing = "0123456789abcdef"
+    db_session.add_all(
+        [
+            ZtNetwork(id=stale, name="Stale", is_active=True),
+            ZtNetwork(id=existing, name="Existing", is_active=False),
+        ]
+    )
+    db_session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/status":
+            return httpx.Response(status_code=200, json={"status": "online"})
+        if request.url.path == "/controller":
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
+        if request.url.path == f"/controller/network/{existing}":
+            return httpx.Response(status_code=200, json={"id": existing})
+        if request.url.path == f"/controller/network/{missing}" and request.method == "GET":
+            return httpx.Response(status_code=404, json={"error": "missing"})
+        if request.url.path == f"/controller/network/{missing}" and request.method == "POST":
+            return httpx.Response(status_code=200, json={"id": missing})
+        raise AssertionError(f"unexpected request {request.method} {request.url.path}")
+
+    manager = _manager(
+        tmp_path=tmp_path,
+        handler=handler,
+        required_network_ids=(existing, missing),
+    )
+    result = run_controller_lifecycle_preflight(
+        manager=manager,
+        db_session=db_session,
+        strict_fail_closed=True,
+        trigger="test_network_db_sync",
+    )
+
+    assert result is not None
+    assert result.network_reconcile.existing_network_ids == (existing,)
+    assert result.network_reconcile.created_network_ids == (missing,)
+
+    synced_rows = db_session.execute(select(ZtNetwork).order_by(ZtNetwork.id.asc())).scalars().all()
+    assert [row.id for row in synced_rows] == sorted([existing, missing])
+    assert all(row.is_active for row in synced_rows)
+    created_row = next(row for row in synced_rows if row.id == missing)
+    assert created_row.name == f"ZT Network {missing}"
 
 
 def test_network_reconciliation_failure_blocks_preflight(
