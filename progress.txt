@@ -1939,3 +1939,39 @@ Next
 Known bugs / regressions
 1. No regressions detected in scoped frontend build or targeted backend assigned-IPv6 workflow test.
 
+
+---
+
+Update: 2026-02-12 (Celery self-hosted provisioning runtime-config alignment fix)
+
+Completed
+1. Identified containerized runtime-config drift affecting worker provisioning path:
+   - `api`/`worker` image fallback used baked `runtime-config.example.yaml`, so self-hosted deterministic IPv6 prefix mappings from host `runtime-config.yaml` were not guaranteed in Celery runs.
+2. Fixed compose wiring so `api` and `worker` consume the same runtime config file:
+   - Set in-container `ZTIX_RUNTIME_CONFIG_PATH` to `/app/runtime-config.yaml`.
+   - Added host mount `${ZTIX_RUNTIME_CONFIG_HOST_PATH:-./runtime-config.yaml}:/app/runtime-config.yaml:ro` for both services.
+3. Added regression coverage for compose runtime-config wiring:
+   - `tests/test_docker_compose_runtime_config.py` validates `api`/`worker` environment and mount configuration.
+4. Updated docs and planning artifacts:
+   - `README.md` configuration split note for compose runtime-config mount.
+   - `IMPLEMENTATION_PLAN.md` Phase 8 Step 8.12 + exit criterion for API/worker runtime-config alignment.
+   - `.env.example` documents optional `ZTIX_RUNTIME_CONFIG_HOST_PATH` override.
+
+Verification
+1. `uv run pytest tests/test_docker_compose_runtime_config.py tests/provisioning/test_tasks.py tests/provisioning/test_service.py -q` passed.
+2. `docker compose --profile prod-like config | rg -n "worker:|api:|ZTIX_RUNTIME_CONFIG_PATH|runtime-config.yaml"` confirms both `api` and `worker` mount `/home/ubuntu/zt-ix/runtime-config.yaml` to `/app/runtime-config.yaml` and set `ZTIX_RUNTIME_CONFIG_PATH=/app/runtime-config.yaml`.
+
+In progress
+1. No active coding work.
+
+Next
+1. Restart/recreate `worker` (and `api` if needed) so they pick up mounted runtime config.
+2. Re-run an approve->provision workflow and verify:
+   - provider call reaches `/controller/network/{network_id}/member/{node_id}`;
+   - request stores deterministic IPv6 assignment in `zt_ipv6_assignment` and surfaces it in workflow APIs.
+
+Known bugs / regressions
+1. None identified in this change scope.
+
+Notes
+1. `ZTIX_RUNTIME_CONFIG_PATH` remains the in-app path; `ZTIX_RUNTIME_CONFIG_HOST_PATH` is now the compose host-file selector to avoid source-path parsing ambiguity.

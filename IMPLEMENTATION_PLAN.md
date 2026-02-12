@@ -315,6 +315,11 @@ Steps:
     - allocator sequencing/non-reuse/concurrency behavior,
     - provider payload assertions for explicit IPv6 `ipAssignments`,
     - end-to-end provisioning path stores and surfaces IPv6-only `assigned_ips` from SQL-backed request associations.
+- [x] Step 8.12: Keep API and Celery worker runtime-config sources aligned in containerized runs.
+  - Minimum behaviors:
+    - mount the same host runtime config file into both `api` and `worker` services,
+    - set in-container runtime config path consistently to avoid image-baked fallback drift,
+    - add automated regression coverage for compose runtime-config wiring.
 
 Exit criteria:
 - [x] `zerotier/zerotier:1.14.2` controller runs on `9993` (TCP API + UDP transport) in the same compose stack as `postgres` and `redis`.
@@ -325,6 +330,7 @@ Exit criteria:
 - [x] Deterministic IPv6 member assignment is provisioned per network prefix using fixed `decimal_split_2_4` ASN encoding.
 - [x] IPv6 allocation is monotonic and never reused for a given (`zt_network_id`, `asn`) sequence space.
 - [x] Assigned IPv6 is persisted in SQL and queryable per request for operator/admin workflow views.
+- [x] API and worker consume the same runtime-config values in containerized executions.
 - [ ] Release profile behavior is validated without `ZT_CENTRAL_API_TOKEN` dependency.
   - Blocked by: Phase 14 Step 14.5.
   - Reason: staging/release-gate validation has not been executed in this environment.

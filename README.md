@@ -22,6 +22,7 @@ This repository uses the following for day-to-day development:
 - `.env.example` contains secrets and runtime wiring values.
 - `runtime-config.example.yaml` contains non-secret runtime defaults and policy-style settings.
 - `runtime-config.yaml` includes `workflow.approval_mode` (`manual_admin` default, `policy_auto` optional).
+- `docker compose` mounts `${ZTIX_RUNTIME_CONFIG_HOST_PATH:-./runtime-config.yaml}` into API/worker at `/app/runtime-config.yaml` so async worker tasks use the same runtime profile as the API.
 - Release profile expectation: `ZT_PROVIDER=self_hosted_controller`.
 - `ZT_PROVIDER=central` remains compatibility-only for migration/testing and is not a release gate.
 

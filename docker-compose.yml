@@ -56,7 +56,7 @@ services:
       APP_SECRET_KEY: "${APP_SECRET_KEY:-replace-with-strong-secret}"
       DATABASE_URL: "postgresql+psycopg://postgres:postgres@postgres:5432/zt_ix"
       REDIS_URL: "redis://redis:6379/0"
-      ZTIX_RUNTIME_CONFIG_PATH: "${ZTIX_RUNTIME_CONFIG_PATH:-runtime-config.yaml}"
+      ZTIX_RUNTIME_CONFIG_PATH: "/app/runtime-config.yaml"
       ZT_PROVIDER: "self_hosted_controller"
       ZT_CONTROLLER_BASE_URL: "http://zerotier-controller:9993/controller"
       ZT_CONTROLLER_AUTH_TOKEN: "${ZT_CONTROLLER_AUTH_TOKEN:-replace-with-controller-token}"
@@ -69,6 +69,7 @@ services:
         condition: service_healthy
     volumes:
       - zt_ix_zerotier_controller_data:/var/lib/zerotier-one:ro
+      - "${ZTIX_RUNTIME_CONFIG_HOST_PATH:-./runtime-config.yaml}:/app/runtime-config.yaml:ro"
     ports:
       - "${API_HOST_PORT:-8000}:8000"
 
@@ -81,7 +82,7 @@ services:
       APP_SECRET_KEY: "${APP_SECRET_KEY:-replace-with-strong-secret}"
       DATABASE_URL: "postgresql+psycopg://postgres:postgres@postgres:5432/zt_ix"
       REDIS_URL: "redis://redis:6379/0"
-      ZTIX_RUNTIME_CONFIG_PATH: "${ZTIX_RUNTIME_CONFIG_PATH:-runtime-config.yaml}"
+      ZTIX_RUNTIME_CONFIG_PATH: "/app/runtime-config.yaml"
       ZT_PROVIDER: "self_hosted_controller"
       ZT_CONTROLLER_BASE_URL: "http://zerotier-controller:9993/controller"
       ZT_CONTROLLER_AUTH_TOKEN: "${ZT_CONTROLLER_AUTH_TOKEN:-replace-with-controller-token}"
@@ -105,6 +106,7 @@ services:
         condition: service_healthy
     volumes:
       - zt_ix_zerotier_controller_data:/var/lib/zerotier-one:ro
+      - "${ZTIX_RUNTIME_CONFIG_HOST_PATH:-./runtime-config.yaml}:/app/runtime-config.yaml:ro"
 
   web:
     profiles: ["prod-like"]
