@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Sans+Hebrew:wght@400;500;600;700&family=Noto+Sans+Mono:wght@400;500&display=swap");
 
 :root {
   --surface-paperWhite: #ffffff;
@@ -42,7 +42,7 @@ body,
 body {
   margin: 0;
   color: var(--depth-graphiteSlate);
-  font-family: "Noto Sans", sans-serif;
+  font-family: "Noto Sans", "Noto Sans SC", "Noto Sans Hebrew", sans-serif;
   background: radial-gradient(circle at top left, #ffffff 0, #f0f5f6 56%, #eef3f5 100%);
 }
 
@@ -137,6 +137,20 @@ textarea {
   margin-bottom: var(--space-6);
 }
 
+.brand-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.brand-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: var(--border-default);
+  background: var(--surface-paperWhite);
+}
+
 .brand-block h2 {
   margin: var(--space-2) 0 var(--space-1);
 }
@@ -229,6 +243,22 @@ textarea {
   background: var(--surface-softWhite);
   font-size: 13px;
   line-height: 18px;
+}
+
+.language-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.language-label {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.language-select {
+  min-width: 164px;
+  width: auto;
 }
 
 .panel {
@@ -496,7 +526,7 @@ textarea {
 }
 
 .table-caption {
-  text-align: left;
+  text-align: start;
   padding: var(--space-3);
   color: var(--depth-harborBlue);
   font-size: 13px;
@@ -507,7 +537,7 @@ textarea {
   position: sticky;
   top: 0;
   background: linear-gradient(180deg, #ffffff 0, #f4f8f9 100%);
-  text-align: left;
+  text-align: start;
   padding: var(--space-3);
   border-bottom: var(--border-default);
   font-size: 13px;
@@ -577,6 +607,46 @@ textarea {
   gap: var(--space-3);
 }
 
+.app-footer {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+[dir="rtl"] .sidebar {
+  left: auto;
+  right: 0;
+  border-right: none;
+  border-left: var(--border-default);
+  transform: translateX(100%);
+}
+
+[dir="rtl"] .sidebar.open {
+  transform: translateX(0);
+}
+
+[dir="rtl"] .topbar-meta {
+  justify-content: flex-start;
+}
+
+[dir="rtl"] .section-action {
+  justify-content: flex-start;
+}
+
+[dir="rtl"] .nav-item {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .brand-identity {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .language-control {
+  flex-direction: row-reverse;
+}
+
 @keyframes page-enter {
   from {
     opacity: 0;
@@ -627,12 +697,25 @@ textarea {
   .shell-grid {
     display: grid;
     grid-template-columns: 240px 1fr;
+    align-items: start;
+  }
+
+  [dir="rtl"] .shell-grid {
+    grid-template-columns: 1fr 240px;
   }
 
   .sidebar {
     position: sticky;
     transform: translateX(0);
     box-shadow: none;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  [dir="rtl"] .sidebar {
+    grid-column: 2;
+    grid-row: 1;
+    transform: translateX(0);
   }
 
   .menu-button {
@@ -640,7 +723,14 @@ textarea {
   }
 
   .workspace {
+    grid-column: 2;
+    grid-row: 1;
     padding-top: var(--space-6);
+  }
+
+  [dir="rtl"] .workspace {
+    grid-column: 1;
+    grid-row: 1;
   }
 
   .filter-grid {

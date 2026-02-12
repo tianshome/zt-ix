@@ -1,0 +1,330 @@
+{
+  "language": {
+    "label": "Language",
+    "option": "{{flag}} {{name}}",
+    "names": {
+      "en-US": "English (US)",
+      "zh-CN": "Chinese (Simplified)",
+      "he": "Hebrew"
+    }
+  },
+  "status": {
+    "pending": "Pending",
+    "approved": "Approved",
+    "provisioning": "Provisioning",
+    "active": "Active",
+    "rejected": "Rejected",
+    "failed": "Failed"
+  },
+  "roles": {
+    "admin": "Admin",
+    "operator": "Operator"
+  },
+  "common": {
+    "retry": "Retry",
+    "reload": "Reload",
+    "refresh": "Refresh",
+    "continue": "Continue",
+    "notAvailable": "Not available",
+    "notSet": "Not set",
+    "unassigned": "unassigned",
+    "notAssigned": "Not assigned",
+    "yes": "Yes",
+    "no": "No",
+    "system": "system"
+  },
+  "labels": {
+    "userId": "User ID",
+    "role": "Role",
+    "linkedAsns": "Linked ASNs",
+    "asn": "ASN",
+    "network": "ZeroTier network",
+    "nodeId": "Node ID",
+    "requested": "Requested",
+    "updated": "Updated",
+    "retries": "Retries"
+  },
+  "errors": {
+    "fallback": {
+      "localLogin": "Unable to sign in with local credentials.",
+      "oauthStart": "Unable to start PeeringDB login.",
+      "oauthCallback": "Unable to finish PeeringDB login.",
+      "onboardingContext": "Unable to load onboarding details.",
+      "onboardingCreate": "Unable to create your request.",
+      "requestsList": "Unable to load request list.",
+      "requestDetail": "Unable to load request details.",
+      "adminQueue": "Unable to load admin request queue.",
+      "adminDetail": "Unable to load admin request details.",
+      "adminAction": "Unable to complete admin action.",
+      "sessionCheck": "Unable to validate your session."
+    },
+    "api": {
+      "network_error": "Network connection failed. Check your connection and try again.",
+      "invalid_response": "The service returned an invalid response.",
+      "request_failed": "The request could not be completed.",
+      "duplicate_active_request": "A matching active request already exists.",
+      "invalid_credentials": "Invalid username or password.",
+      "credential_disabled": "This account is disabled. Contact support.",
+      "local_auth_disabled": "Local sign-in is disabled.",
+      "invalid_state": "The login session is no longer valid. Start login again.",
+      "expired_state": "The login session expired. Start login again.",
+      "invalid_nonce": "Security validation failed. Start login again.",
+      "upstream_auth_failure": "PeeringDB authentication failed. Try again.",
+      "validation_error": "Some values are invalid. Review and try again.",
+      "not_found": "Requested item was not found.",
+      "forbidden": "You do not have permission to perform this action.",
+      "conflict": "The request conflicts with the current state.",
+      "unauthorized": "Please sign in again to continue."
+    }
+  },
+  "nav": {
+    "home": "Home",
+    "login": "Login",
+    "onboarding": "Onboarding",
+    "dashboard": "Dashboard",
+    "adminQueue": "Admin queue"
+  },
+  "shell": {
+    "logoAlt": "{{name}} logo",
+    "brandSummary": "Manage network access requests with clear status updates.",
+    "primaryNavigation": "Primary navigation",
+    "menu": "Menu",
+    "path": "Path: {{path}}",
+    "sessionUser": "@{{username}}",
+    "logout": "Sign out",
+    "logoutBusy": "Signing out...",
+    "support": "Support",
+    "github": "GitHub"
+  },
+  "session": {
+    "caption": "Session",
+    "loadingTitle": "Loading",
+    "loadingRoute": "Checking your session before opening this page.",
+    "errorTitle": "Unable to validate session",
+    "retry": "Retry session check",
+    "states": {
+      "loading": "loading",
+      "unauthenticated": "signed out",
+      "error": "session error"
+    }
+  },
+  "home": {
+    "caption": "Welcome",
+    "loading": "Loading session state.",
+    "openLogin": "Open login",
+    "unauthenticatedMessage": "Sign in to request peering access and monitor request status.",
+    "signedInTitle": "Session active",
+    "signedInMessage": "Signed in as {{username}}. Continue to onboarding or check current request status.",
+    "goToOnboarding": "Open onboarding",
+    "goToDashboard": "Open dashboard",
+    "goToAdminQueue": "Open admin queue"
+  },
+  "login": {
+    "caption": "Sign in",
+    "title": "Login",
+    "checkingSession": "Checking existing session.",
+    "alreadySignedInTitle": "Already signed in",
+    "alreadySignedInMessage": "You are already signed in as {{username}}.",
+    "goToDashboard": "Go to dashboard",
+    "lead": "Choose how you want to sign in. Any errors are shown directly on this page.",
+    "oauth": {
+      "title": "PeeringDB login",
+      "description": "Use your PeeringDB account and return here after authorization.",
+      "cta": "Continue with PeeringDB",
+      "busy": "Redirecting..."
+    },
+    "local": {
+      "title": "Local credentials",
+      "username": "Username",
+      "password": "Password",
+      "cta": "Sign in",
+      "busy": "Signing in..."
+    }
+  },
+  "authCallback": {
+    "caption": "Sign in",
+    "title": "PeeringDB callback",
+    "backToLogin": "Back to login",
+    "detailCode": "Detail code: {{code}}",
+    "messages": {
+      "processing": "Processing PeeringDB callback.",
+      "missingParameters": "Missing callback parameters. Start login again.",
+      "success": "Login successful. Redirecting to onboarding."
+    }
+  },
+  "onboarding": {
+    "caption": "Onboarding",
+    "title": "Request network access",
+    "loading": "Loading eligible ASN and network data.",
+    "lead": "Submit your ASN and target network details to request access.",
+    "openExistingRequest": "Open existing request",
+    "restrictions": "Network restrictions enabled: {{networks}}",
+    "validation": {
+      "invalidAsn": "Enter a valid ASN."
+    },
+    "emptyContext": {
+      "title": "Onboarding details unavailable",
+      "description": "Could not load onboarding data for this account."
+    },
+    "noEligibleAsn": {
+      "title": "No eligible ASN",
+      "description": "Your account does not currently have an eligible ASN assignment. Contact support for access.",
+      "openDashboard": "Open dashboard"
+    },
+    "form": {
+      "asn": "ASN",
+      "network": "Target ZeroTier network",
+      "nodeId": "Node ID (your ZeroTier client)",
+      "nodeIdPlaceholder": "abcde12345",
+      "notes": "Notes (optional)",
+      "notesPlaceholder": "Add details to help reviewers",
+      "submit": "Submit request",
+      "submitting": "Submitting...",
+      "goToDashboard": "Go to dashboard"
+    }
+  },
+  "dashboard": {
+    "caption": "Operator",
+    "title": "Request status",
+    "loading": "Loading your requests.",
+    "polling": "Updates every {{seconds}}s. Last refresh: {{refreshedAt}}",
+    "empty": {
+      "title": "No requests yet",
+      "description": "Create your first request to begin provisioning.",
+      "start": "Start onboarding"
+    },
+    "table": {
+      "caption": "Operator request list",
+      "request": "Request",
+      "asn": "ASN",
+      "network": "Network",
+      "status": "Status",
+      "assignedIpv6": "Assigned IPv6",
+      "updated": "Updated",
+      "action": "Action",
+      "viewDetails": "View details"
+    }
+  },
+  "requestDetail": {
+    "caption": "Operator",
+    "title": "Request details",
+    "loading": "Loading request details.",
+    "header": "Request ID {{requestId}} | Last refresh {{refreshedAt}}",
+    "failed": "Provisioning failed: {{error}}",
+    "rejected": "Rejected: {{reason}}",
+    "backToDashboard": "Back to dashboard",
+    "empty": {
+      "title": "Request not found",
+      "description": "This request is unavailable or not visible to your account.",
+      "backToDashboard": "Back to dashboard"
+    },
+    "membership": {
+      "title": "Membership",
+      "memberId": "Member ID",
+      "node": "Node",
+      "authorized": "Authorized",
+      "assignedIps": "Assigned IPs",
+      "empty": {
+        "title": "No membership record yet",
+        "description": "Membership details appear after provisioning succeeds."
+      }
+    }
+  },
+  "adminQueue": {
+    "caption": "Admin",
+    "title": "Request queue",
+    "loading": "Loading admin queue.",
+    "polling": "Updates every {{seconds}}s. Last refresh: {{refreshedAt}}",
+    "filters": {
+      "status": "Status",
+      "all": "All",
+      "asn": "ASN",
+      "asnPlaceholder": "64512",
+      "network": "ZeroTier network",
+      "networkPlaceholder": "abcdef0123456789",
+      "minAge": "Minimum age (minutes)",
+      "minAgePlaceholder": "30",
+      "apply": "Apply filters",
+      "clear": "Clear"
+    },
+    "empty": {
+      "title": "No requests found",
+      "description": "No requests match the current filters.",
+      "reset": "Reset filters"
+    },
+    "table": {
+      "caption": "Admin request queue",
+      "request": "Request",
+      "asn": "ASN",
+      "network": "Network",
+      "status": "Status",
+      "user": "User",
+      "assignedIpv6": "Assigned IPv6",
+      "updated": "Updated",
+      "action": "Action",
+      "review": "Review"
+    }
+  },
+  "adminReview": {
+    "caption": "Admin",
+    "title": "Request review",
+    "loading": "Loading request details.",
+    "header": "Reviewing {{requestId}}",
+    "backToQueue": "Back to admin queue",
+    "validation": {
+      "rejectReasonRequired": "Reject reason is required."
+    },
+    "labels": {
+      "submitted": "Submitted",
+      "updated": "Last updated",
+      "retryCount": "Retry count",
+      "lastError": "Last error",
+      "noError": "No error recorded"
+    },
+    "actions": {
+      "title": "Actions",
+      "approve": "Approve",
+      "retry": "Retry",
+      "reject": "Reject",
+      "rejectReason": "Reject reason",
+      "rejectPlaceholder": "Explain why this request is being rejected",
+      "approveSuccess": "Request approved and queued for provisioning.",
+      "retrySuccess": "Retry queued from failed state.",
+      "rejectSuccess": "Request rejected."
+    },
+    "audit": {
+      "title": "Audit events",
+      "caption": "Request audit events",
+      "empty": {
+        "title": "No audit events",
+        "description": "Audit timeline is currently empty for this request."
+      },
+      "table": {
+        "time": "Time",
+        "action": "Action",
+        "actor": "Actor",
+        "metadata": "Metadata"
+      }
+    },
+    "empty": {
+      "title": "Request unavailable",
+      "description": "This request was not found.",
+      "backToQueue": "Back to admin queue"
+    }
+  },
+  "notFound": {
+    "caption": "Routing",
+    "title": "Page not found",
+    "empty": {
+      "title": "Unknown route",
+      "description": "This path is outside the current app routes.",
+      "backHome": "Back home"
+    }
+  },
+  "forbidden": {
+    "caption": "Access",
+    "title": "Admin access required",
+    "message": "Your current session does not have admin access for this route.",
+    "openDashboard": "Open dashboard"
+  }
+}

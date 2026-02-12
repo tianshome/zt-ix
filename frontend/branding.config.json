@@ -1,0 +1,8 @@
+{
+  "appName": "ZT-IX Internet Exchange",
+  "shortName": "ZT-IX",
+  "logoPath": "/branding/logo.svg",
+  "supportUrl": "mailto:support@example.com",
+  "footerGithubUrl": "https://github.com/example/zt-ix",
+  "footerText": "Network peering access management"
+}

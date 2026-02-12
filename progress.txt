@@ -3,6 +3,83 @@ Date: 2026-02-10
 
 ---
 
+Update: 2026-02-12 (RTL desktop regression fix: main content hidden in `he` wide viewport)
+
+Completed
+1. Fixed desktop RTL grid placement bug in `frontend/src/styles.css`:
+   - explicitly pinned `.sidebar` and `.workspace` to row/column assignments at `min-width: 1024px`,
+   - added explicit RTL desktop placement for `.workspace` (`grid-column: 1`) and `.sidebar` (`grid-column: 2`),
+   - added `align-items: start` on desktop shell grid to keep deterministic top alignment.
+2. Kept mobile behavior unchanged and scoped the fix to desktop breakpoint rules only.
+
+Verification
+1. `npm run build` (inside `frontend/`) passed after CSS change.
+
+In progress
+1. No active coding work in this update.
+
+Next
+1. Manual browser check in Hebrew (`he`) at wide viewport to confirm dashboard/page content now renders alongside sidebar.
+2. Continue remaining manual Phase 11 checks that require interactive browser validation.
+
+Known bugs / regressions
+1. No new regressions detected in scoped frontend build verification.
+
+---
+
+Update: 2026-02-12 (Phase 11 Step 11.8 implemented: i18n + branding integration)
+
+Completed
+1. Implemented frontend i18n runtime bootstrap and deterministic locale selection:
+   - added `frontend/src/i18n.ts` using `react-i18next`/`i18next` with locale detection order `navigator.languages` -> `navigator.language` -> first configured locale fallback,
+   - persisted manual language override via `localStorage` and synchronized `<html lang>` + RTL/LTR direction.
+2. Added centralized translation catalogs for initial MVP locales:
+   - `frontend/public/locales/en-US/common.json`
+   - `frontend/public/locales/zh-CN/common.json`
+   - `frontend/public/locales/he/common.json`
+3. Integrated localized UI copy across SPA shell and workflow screens:
+   - navigation labels, page titles, form labels/placeholders, status badges, table headers, and API-facing error/status fallback messages now resolve via locale catalogs.
+4. Added persistent language switcher in app header with emoji labels and localized language names:
+   - supported options: `en-US` (`🇺🇸`), `zh-CN` (`🇨🇳`), `he` (`🇮🇱`).
+5. Implemented RTL layout handling for Hebrew and locale-specific font coverage:
+   - updated CSS for RTL shell/sidebar/topbar behavior,
+   - expanded font stack/import to include Noto CJK/Hebrew coverage.
+6. Implemented compile-time branding configuration integration:
+   - added `frontend/branding.config.json` and typed loader `frontend/src/branding.ts`,
+   - app shell now consumes compile-time branding values (app name/short name/logo/support link/footer GitHub/footer text),
+   - added branded logo asset `frontend/public/branding/logo.svg`.
+7. Wired i18n initialization before React mount:
+   - updated `frontend/src/main.tsx` to await i18n bootstrap before rendering.
+8. Added required frontend dependencies per stack doc:
+   - `i18next@24.2.1`
+   - `react-i18next@15.4.0`
+9. Updated implementation tracking:
+   - `IMPLEMENTATION_PLAN.md` bumped to version `2.7`,
+   - marked Step `11.8` complete,
+   - marked Phase 11 localization/branding exit criteria complete.
+
+Verification
+1. `npm run build` (inside `frontend/`) passed.
+
+In progress
+1. No active coding work in this update.
+
+Next
+1. Run remaining Phase 11 manual verification items in browser:
+   - locale auto-detection fallback,
+   - language-switcher override behavior,
+   - RTL layout checks for `he` on `/login`, `/onboarding`, `/dashboard`, `/admin/requests`,
+   - branding value rendering checks in shell/header/footer.
+2. Continue Phase 12 frontend MVP validation (`12.1` to `12.3`).
+
+Known bugs / regressions
+1. None identified in scoped build validation.
+
+Notes
+1. `npm install` emitted a local environment warning for npm engine mismatch (`packageManager` requires npm `11.10.0`, local runner is npm `10.8.2`); dependency versions and build output remained successful.
+
+---
+
 Update: 2026-02-12 (Documentation-only: Phase 11 i18n + UX copy cleanup + build-time branding scope)
 
 Completed

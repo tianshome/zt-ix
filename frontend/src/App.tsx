@@ -1,3 +1,5 @@
+import { type TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -12,6 +14,7 @@ import {
   api,
   isApiClientError,
 } from "./api";
+import { branding } from "./branding";
 import {
   Table,
   TableBody,
@@ -21,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "./components/ui/table";
+import { DEFAULT_LOCALE, LOCALE_OPTIONS, type SupportedLocale, resolveSupportedLocale } from "./i18n";
 
 const REQUEST_POLL_INTERVAL_MS = 10_000;
 const ADMIN_POLL_INTERVAL_MS = 10_000;
@@ -100,7 +104,7 @@ interface RouteMatch {
 }
 
 interface NavItem {
-  label: string;
+  labelKey: string;
   path: string;
 }
 
@@ -167,9 +171,9 @@ function cx(...parts: Array<string | undefined | null | false>): string {
   return parts.filter(Boolean).join(" ");
 }
 
-function formatDateTime(value: string | null | undefined): string {
+function formatDateTime(value: string | null | undefined, locale: string, t: TFunction): string {
   if (!value) {
-    return "Not available";
+    return t("common.notAvailable");
   }
 
   const parsed = new Date(value);
@@ -177,15 +181,15 @@ function formatDateTime(value: string | null | undefined): string {
     return value;
   }
 
-  return parsed.toLocaleString();
+  return parsed.toLocaleString(locale);
 }
 
-function formatAssignedIpv6(value: string | null | undefined): string {
-  return value ?? "unassigned";
+function formatAssignedIpv6(value: string | null | undefined, t: TFunction): string {
+  return value ?? t("common.unassigned");
 }
 
-function statusLabel(status: RequestStatus): string {
-  return status.replace(/_/g, " ");
+function statusLabel(status: RequestStatus, t: TFunction): string {
+  return t(`status.${status}`);
 }
 
 function statusClass(status: RequestStatus): string {
@@ -207,19 +211,27 @@ function statusClass(status: RequestStatus): string {
 }
 
 function StatusBadge({ status }: { status: RequestStatus }) {
-  return <span className={statusClass(status)}>{statusLabel(status)}</span>;
+  const { t } = useTranslation();
+  return <span className={statusClass(status)}>{statusLabel(status, t)}</span>;
 }
 
 function asApiError(error: unknown): ApiClientError | undefined {
   return isApiClientError(error) ? error : undefined;
 }
 
-function errorMessage(error: unknown, fallback: string): string {
+function apiErrorMessage(error: unknown, t: TFunction, fallbackKey: string): string {
   const apiError = asApiError(error);
-  if (apiError) {
-    return `${apiError.message} (${apiError.code})`;
+  if (!apiError) {
+    return t(fallbackKey);
   }
-  return fallback;
+
+  const translationKey = `errors.api.${apiError.code}`;
+  const localized = t(translationKey);
+  if (localized !== translationKey) {
+    return localized;
+  }
+
+  return t(fallbackKey);
 }
 
 function readStringDetail(error: ApiClientError | undefined, key: string): string | undefined {
@@ -228,6 +240,10 @@ function readStringDetail(error: ApiClientError | undefined, key: string): strin
   }
   const value = error.details[key];
   return typeof value === "string" ? value : undefined;
+}
+
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
 }
 
 function AppLink({
@@ -345,8 +361,8 @@ function EmptyState({
 function DefinitionGrid({ rows }: { rows: Array<{ label: string; value: ReactNode }> }) {
   return (
     <dl className="definition-grid">
-      {rows.map((row) => (
-        <div key={row.label}>
+      {rows.map((row, index) => (
+        <div key={`${index}-${row.label}`}>
           <dt>{row.label}</dt>
           <dd>{row.value}</dd>
         </div>
@@ -360,18 +376,27 @@ function HomeScreen({
 }: {
   session: SessionState;
 }) {
+  const { t } = useTranslation();
+
   if (session.status === "loading") {
     return (
-      <ScreenSection caption="Welcome" title="ZT-IX Console">
-        <p>Loading session state.</p>
+      <ScreenSection caption={t("home.caption")} title={branding.appName}>
+        <p>{t("home.loading")}</p>
       </ScreenSection>
     );
   }
 
   if (session.status === "error") {
     return (
-      <ScreenSection caption="Welcome" title="ZT-IX Console">
-        <InlineError message={session.message} action={<button type="button" className="button secondary" onClick={() => window.location.reload()}>Retry</button>} />
+      <ScreenSection caption={t("home.caption")} title={branding.appName}>
+        <InlineError
+          message={session.message}
+          action={
+            <button type="button" className="button secondary" onClick={() => window.location.reload()}>
+              {t("common.retry")}
+            </button>
+          }
+        />
       </ScreenSection>
     );
   }
@@ -379,41 +404,46 @@ function HomeScreen({
   if (session.status === "unauthenticated") {
     return (
       <ScreenSection
-        caption="Welcome"
-        title="ZT-IX Console"
-        action={<AppLink to="/login" className="button primary">Open Login</AppLink>}
+        caption={t("home.caption")}
+        title={branding.appName}
+        action={
+          <AppLink to="/login" className="button primary">
+            {t("home.openLogin")}
+          </AppLink>
+        }
       >
-        <p>
-          Use the login route to start PeeringDB OAuth or local credential authentication.
-          This frontend keeps all auth failures inline and does not rely on backend error pages.
-        </p>
+        <p>{t("home.unauthenticatedMessage")}</p>
       </ScreenSection>
     );
   }
 
   return (
-    <ScreenSection caption="Welcome" title="Session Active">
+    <ScreenSection caption={t("home.caption")} title={t("home.signedInTitle")}>
       <p>
-        Signed in as <strong>{session.user.username}</strong>. Continue onboarding or monitor request
-        state from dashboard routes.
+        {t("home.signedInMessage", {
+          username: session.user.username,
+        })}
       </p>
       <DefinitionGrid
         rows={[
-          { label: "User ID", value: <code className="mono">{session.user.id}</code> },
-          { label: "Role", value: session.user.is_admin ? "Admin" : "Operator" },
-          { label: "Linked ASNs", value: String(session.asns.length) },
+          { label: t("labels.userId"), value: <code className="mono">{session.user.id}</code> },
+          {
+            label: t("labels.role"),
+            value: session.user.is_admin ? t("roles.admin") : t("roles.operator"),
+          },
+          { label: t("labels.linkedAsns"), value: String(session.asns.length) },
         ]}
       />
       <div className="button-row">
         <AppLink to="/onboarding" className="button primary">
-          Open Onboarding
+          {t("home.goToOnboarding")}
         </AppLink>
         <AppLink to="/dashboard" className="button secondary">
-          Open Dashboard
+          {t("home.goToDashboard")}
         </AppLink>
         {session.user.is_admin ? (
           <AppLink to="/admin/requests" className="button secondary">
-            Open Admin Queue
+            {t("home.goToAdminQueue")}
           </AppLink>
         ) : null}
       </div>
@@ -428,6 +458,7 @@ function LoginScreen({
   session: SessionState;
   onSessionRefresh: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [localBusy, setLocalBusy] = useState(false);
@@ -444,7 +475,7 @@ function LoginScreen({
       await onSessionRefresh();
       navigate("/onboarding");
     } catch (error) {
-      setErrorText(errorMessage(error, "Local login failed."));
+      setErrorText(apiErrorMessage(error, t, "errors.fallback.localLogin"));
     } finally {
       setLocalBusy(false);
     }
@@ -458,15 +489,15 @@ function LoginScreen({
       const response = await api.startPeeringDbAuth();
       window.location.assign(response.authorization_url);
     } catch (error) {
-      setErrorText(errorMessage(error, "Unable to start PeeringDB OAuth."));
+      setErrorText(apiErrorMessage(error, t, "errors.fallback.oauthStart"));
       setOauthBusy(false);
     }
   };
 
   if (session.status === "loading") {
     return (
-      <ScreenSection caption="Auth" title="Login">
-        <p>Checking existing session.</p>
+      <ScreenSection caption={t("login.caption")} title={t("login.title")}>
+        <p>{t("login.checkingSession")}</p>
       </ScreenSection>
     );
   }
@@ -474,43 +505,48 @@ function LoginScreen({
   if (session.status === "authenticated") {
     return (
       <ScreenSection
-        caption="Auth"
-        title="Already Signed In"
-        action={<AppLink to="/onboarding" className="button primary">Continue</AppLink>}
+        caption={t("login.caption")}
+        title={t("login.alreadySignedInTitle")}
+        action={
+          <AppLink to="/onboarding" className="button primary">
+            {t("common.continue")}
+          </AppLink>
+        }
       >
         <InlineInfo
-          message={`You are already logged in as ${session.user.username}.`}
-          action={<AppLink to="/dashboard" className="button secondary">Go to dashboard</AppLink>}
+          message={t("login.alreadySignedInMessage", { username: session.user.username })}
+          action={
+            <AppLink to="/dashboard" className="button secondary">
+              {t("login.goToDashboard")}
+            </AppLink>
+          }
         />
       </ScreenSection>
     );
   }
 
   return (
-    <ScreenSection caption="Auth" title="Login">
-      <p className="lead-text">
-        Choose PeeringDB OAuth or local credentials. Authentication errors are shown inline on this
-        route.
-      </p>
+    <ScreenSection caption={t("login.caption")} title={t("login.title")}>
+      <p className="lead-text">{t("login.lead")}</p>
       {errorText ? <InlineError message={errorText} /> : null}
       <div className="auth-grid">
         <div className="sub-panel">
-          <h2>PeeringDB OAuth</h2>
-          <p>Start browser redirect flow and return to <code className="mono">/auth/callback</code>.</p>
+          <h2>{t("login.oauth.title")}</h2>
+          <p>{t("login.oauth.description")}</p>
           <button
             type="button"
             className="button primary"
             onClick={handlePeeringDbStart}
             disabled={oauthBusy || localBusy}
           >
-            {oauthBusy ? "Redirecting..." : "Continue with PeeringDB"}
+            {oauthBusy ? t("login.oauth.busy") : t("login.oauth.cta")}
           </button>
         </div>
         <div className="sub-panel">
-          <h2>Local Credentials</h2>
+          <h2>{t("login.local.title")}</h2>
           <form className="form-grid" onSubmit={handleLocalLogin}>
             <label>
-              Username
+              {t("login.local.username")}
               <input
                 value={username}
                 onChange={(event) => setUsername(event.currentTarget.value)}
@@ -519,7 +555,7 @@ function LoginScreen({
               />
             </label>
             <label>
-              Password
+              {t("login.local.password")}
               <input
                 type="password"
                 value={password}
@@ -529,7 +565,7 @@ function LoginScreen({
               />
             </label>
             <button type="submit" className="button secondary" disabled={localBusy || oauthBusy}>
-              {localBusy ? "Signing in..." : "Sign in"}
+              {localBusy ? t("login.local.busy") : t("login.local.cta")}
             </button>
           </form>
         </div>
@@ -543,8 +579,9 @@ function AuthCallbackScreen({
 }: {
   onSessionRefresh: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [phase, setPhase] = useState<"processing" | "success" | "error">("processing");
-  const [message, setMessage] = useState("Processing PeeringDB callback.");
+  const [message, setMessage] = useState(t("authCallback.messages.processing"));
   const [detailCode, setDetailCode] = useState<string | null>(null);
   const startedRef = useRef(false);
 
@@ -562,7 +599,7 @@ function AuthCallbackScreen({
 
       if (!code && !state && !oauthError) {
         setPhase("error");
-        setMessage("Callback parameters are missing. Restart login from /login.");
+        setMessage(t("authCallback.messages.missingParameters"));
         return;
       }
 
@@ -574,23 +611,23 @@ function AuthCallbackScreen({
         });
         await onSessionRefresh();
         setPhase("success");
-        setMessage("Login successful. Redirecting to onboarding.");
+        setMessage(t("authCallback.messages.success"));
         window.setTimeout(() => {
           navigate("/onboarding");
         }, 500);
       } catch (error) {
         const apiError = asApiError(error);
         setPhase("error");
-        setMessage(errorMessage(error, "OAuth callback failed."));
+        setMessage(apiErrorMessage(error, t, "errors.fallback.oauthCallback"));
         setDetailCode(readStringDetail(apiError, "detail_code") ?? null);
       }
     };
 
     void run();
-  }, [onSessionRefresh]);
+  }, [onSessionRefresh, t]);
 
   return (
-    <ScreenSection caption="Auth" title="OAuth Callback">
+    <ScreenSection caption={t("authCallback.caption")} title={t("authCallback.title")}>
       {phase === "processing" ? <InlineInfo message={message} /> : null}
       {phase === "success" ? <InlineInfo message={message} /> : null}
       {phase === "error" ? (
@@ -599,13 +636,13 @@ function AuthCallbackScreen({
           action={
             <div className="button-row">
               <AppLink to="/login" className="button secondary">
-                Back to Login
+                {t("authCallback.backToLogin")}
               </AppLink>
             </div>
           }
         />
       ) : null}
-      {detailCode ? <p className="caption minor">Detail code: {detailCode}</p> : null}
+      {detailCode ? <p className="caption minor">{t("authCallback.detailCode", { code: detailCode })}</p> : null}
     </ScreenSection>
   );
 }
@@ -615,6 +652,7 @@ function OnboardingScreen({
 }: {
   onUnauthorized: () => void;
 }) {
+  const { t } = useTranslation();
   const [context, setContext] = useState<OnboardingContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -640,11 +678,11 @@ function OnboardingScreen({
         onUnauthorized();
         return;
       }
-      setLoadError(errorMessage(error, "Unable to load onboarding context."));
+      setLoadError(apiErrorMessage(error, t, "errors.fallback.onboardingContext"));
     } finally {
       setLoading(false);
     }
-  }, [onUnauthorized]);
+  }, [onUnauthorized, t]);
 
   useEffect(() => {
     void loadContext();
@@ -672,7 +710,7 @@ function OnboardingScreen({
 
     const asn = Number(asnValue);
     if (!Number.isFinite(asn) || asn <= 0) {
-      setSubmitError("Enter a valid ASN.");
+      setSubmitError(t("onboarding.validation.invalidAsn"));
       setSubmitBusy(false);
       return;
     }
@@ -695,7 +733,7 @@ function OnboardingScreen({
       if (apiError && apiError.code === "duplicate_active_request") {
         setDuplicateLink(readStringDetail(apiError, "existing_request_url") ?? null);
       }
-      setSubmitError(errorMessage(error, "Unable to create onboarding request."));
+      setSubmitError(apiErrorMessage(error, t, "errors.fallback.onboardingCreate"));
     } finally {
       setSubmitBusy(false);
     }
@@ -703,18 +741,22 @@ function OnboardingScreen({
 
   if (loading) {
     return (
-      <ScreenSection caption="Onboarding" title="Create Join Request">
-        <p>Loading eligible ASN and network data.</p>
+      <ScreenSection caption={t("onboarding.caption")} title={t("onboarding.title")}>
+        <p>{t("onboarding.loading")}</p>
       </ScreenSection>
     );
   }
 
   if (loadError) {
     return (
-      <ScreenSection caption="Onboarding" title="Create Join Request">
+      <ScreenSection caption={t("onboarding.caption")} title={t("onboarding.title")}>
         <InlineError
           message={loadError}
-          action={<button type="button" className="button secondary" onClick={() => void loadContext()}>Retry</button>}
+          action={
+            <button type="button" className="button secondary" onClick={() => void loadContext()}>
+              {t("common.retry")}
+            </button>
+          }
         />
       </ScreenSection>
     );
@@ -722,11 +764,15 @@ function OnboardingScreen({
 
   if (!context) {
     return (
-      <ScreenSection caption="Onboarding" title="Create Join Request">
+      <ScreenSection caption={t("onboarding.caption")} title={t("onboarding.title")}>
         <EmptyState
-          title="No context loaded"
-          description="Onboarding context is unavailable. Retry loading this route."
-          action={<button type="button" className="button secondary" onClick={() => void loadContext()}>Reload</button>}
+          title={t("onboarding.emptyContext.title")}
+          description={t("onboarding.emptyContext.description")}
+          action={
+            <button type="button" className="button secondary" onClick={() => void loadContext()}>
+              {t("common.reload")}
+            </button>
+          }
         />
       </ScreenSection>
     );
@@ -734,28 +780,30 @@ function OnboardingScreen({
 
   if (!context.constraints.submission_allowed || context.eligible_asns.length === 0) {
     return (
-      <ScreenSection caption="Onboarding" title="Create Join Request">
+      <ScreenSection caption={t("onboarding.caption")} title={t("onboarding.title")}>
         <EmptyState
-          title="No eligible ASN available"
-          description="Your account does not currently have an eligible ASN assignment. Contact support to update account mappings."
-          action={<AppLink to="/dashboard" className="button secondary">Open Dashboard</AppLink>}
+          title={t("onboarding.noEligibleAsn.title")}
+          description={t("onboarding.noEligibleAsn.description")}
+          action={
+            <AppLink to="/dashboard" className="button secondary">
+              {t("onboarding.noEligibleAsn.openDashboard")}
+            </AppLink>
+          }
         />
       </ScreenSection>
     );
   }
 
   return (
-    <ScreenSection caption="Onboarding" title="Create Join Request">
-      <p className="lead-text">
-        Submit ASN and target network details. Duplicate active requests return inline conflict details.
-      </p>
+    <ScreenSection caption={t("onboarding.caption")} title={t("onboarding.title")}>
+      <p className="lead-text">{t("onboarding.lead")}</p>
       {submitError ? (
         <InlineError
           message={submitError}
           action={
             duplicateLink ? (
               <AppLink to={duplicateLink} className="button secondary">
-                Open existing request
+                {t("onboarding.openExistingRequest")}
               </AppLink>
             ) : undefined
           }
@@ -763,7 +811,7 @@ function OnboardingScreen({
       ) : null}
       <form className="form-grid onboarding-form" onSubmit={handleSubmit}>
         <label>
-          ASN
+          {t("onboarding.form.asn")}
           <select value={asnValue} onChange={(event) => setAsnValue(event.currentTarget.value)}>
             {context.eligible_asns.map((item) => (
               <option key={item.id} value={item.asn}>
@@ -774,7 +822,7 @@ function OnboardingScreen({
           </select>
         </label>
         <label>
-          Target ZeroTier network
+          {t("onboarding.form.network")}
           <select
             value={networkValue}
             onChange={(event) => setNetworkValue(event.currentTarget.value)}
@@ -787,35 +835,37 @@ function OnboardingScreen({
           </select>
         </label>
         <label>
-          Node ID (your ZeroTier client)
+          {t("onboarding.form.nodeId")}
           <input
             value={nodeIdValue}
             onChange={(event) => setNodeIdValue(event.currentTarget.value)}
             maxLength={10}
-            placeholder="abcde12345"
+            placeholder={t("onboarding.form.nodeIdPlaceholder")}
           />
         </label>
         <label>
-          Notes (optional)
+          {t("onboarding.form.notes")}
           <textarea
             value={notesValue}
             onChange={(event) => setNotesValue(event.currentTarget.value)}
             rows={4}
-            placeholder="Operational notes for reviewers"
+            placeholder={t("onboarding.form.notesPlaceholder")}
           />
         </label>
         <div className="button-row">
           <button type="submit" className="button primary" disabled={submitBusy}>
-            {submitBusy ? "Submitting..." : "Submit Request"}
+            {submitBusy ? t("onboarding.form.submitting") : t("onboarding.form.submit")}
           </button>
           <AppLink to="/dashboard" className="button secondary">
-            Go to Dashboard
+            {t("onboarding.form.goToDashboard")}
           </AppLink>
         </div>
       </form>
       {context.constraints.has_network_restrictions ? (
         <p className="caption minor">
-          Network restrictions enabled: {context.constraints.restricted_network_ids.join(", ")}
+          {t("onboarding.restrictions", {
+            networks: context.constraints.restricted_network_ids.join(", "),
+          })}
         </p>
       ) : null}
     </ScreenSection>
@@ -827,10 +877,13 @@ function DashboardScreen({
 }: {
   onUnauthorized: () => void;
 }) {
+  const { t, i18n } = useTranslation();
   const [requests, setRequests] = useState<JoinRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+  const locale = i18n.resolvedLanguage ?? DEFAULT_LOCALE;
 
   const loadRequests = useCallback(
     async (silent: boolean) => {
@@ -850,7 +903,7 @@ function DashboardScreen({
           return;
         }
         if (!silent) {
-          setLoadError(errorMessage(error, "Unable to load request list."));
+          setLoadError(apiErrorMessage(error, t, "errors.fallback.requestsList"));
         }
       } finally {
         if (!silent) {
@@ -858,7 +911,7 @@ function DashboardScreen({
         }
       }
     },
-    [onUnauthorized],
+    [onUnauthorized, t],
   );
 
   useEffect(() => {
@@ -896,18 +949,22 @@ function DashboardScreen({
 
   if (loading) {
     return (
-      <ScreenSection caption="Operator" title="Dashboard">
-        <p>Loading operator requests.</p>
+      <ScreenSection caption={t("dashboard.caption")} title={t("dashboard.title")}>
+        <p>{t("dashboard.loading")}</p>
       </ScreenSection>
     );
   }
 
   if (loadError) {
     return (
-      <ScreenSection caption="Operator" title="Dashboard">
+      <ScreenSection caption={t("dashboard.caption")} title={t("dashboard.title")}>
         <InlineError
           message={loadError}
-          action={<button type="button" className="button secondary" onClick={() => void loadRequests(false)}>Retry</button>}
+          action={
+            <button type="button" className="button secondary" onClick={() => void loadRequests(false)}>
+              {t("common.retry")}
+            </button>
+          }
         />
       </ScreenSection>
     );
@@ -915,22 +972,25 @@ function DashboardScreen({
 
   return (
     <ScreenSection
-      caption="Operator"
-      title="Dashboard"
+      caption={t("dashboard.caption")}
+      title={t("dashboard.title")}
       action={
         <button type="button" className="button secondary" onClick={() => void loadRequests(false)}>
-          Refresh
+          {t("common.refresh")}
         </button>
       }
     >
       <p className="caption minor">
-        Polling every {REQUEST_POLL_INTERVAL_MS / 1000}s. Last refresh: {formatDateTime(lastUpdated)}
+        {t("dashboard.polling", {
+          seconds: REQUEST_POLL_INTERVAL_MS / 1000,
+          refreshedAt: formatDateTime(lastUpdated, locale, t),
+        })}
       </p>
 
       <div className="stat-grid">
         {STATUS_ORDER.map((status) => (
           <div key={status} className="stat-card">
-            <span className="caption minor">{statusLabel(status)}</span>
+            <span className="caption minor">{statusLabel(status, t)}</span>
             <strong>{counts[status]}</strong>
           </div>
         ))}
@@ -938,22 +998,26 @@ function DashboardScreen({
 
       {sortedRequests.length === 0 ? (
         <EmptyState
-          title="No requests yet"
-          description="Create your first onboarding request to begin provisioning."
-          action={<AppLink to="/onboarding" className="button primary">Start onboarding</AppLink>}
+          title={t("dashboard.empty.title")}
+          description={t("dashboard.empty.description")}
+          action={
+            <AppLink to="/onboarding" className="button primary">
+              {t("dashboard.empty.start")}
+            </AppLink>
+          }
         />
       ) : (
         <Table>
-          <TableCaption>Operator request list</TableCaption>
+          <TableCaption>{t("dashboard.table.caption")}</TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead>Request</TableHead>
-              <TableHead>ASN</TableHead>
-              <TableHead>Network</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Assigned IPv6</TableHead>
-              <TableHead>Updated</TableHead>
-              <TableHead>Action</TableHead>
+              <TableHead>{t("dashboard.table.request")}</TableHead>
+              <TableHead>{t("dashboard.table.asn")}</TableHead>
+              <TableHead>{t("dashboard.table.network")}</TableHead>
+              <TableHead>{t("dashboard.table.status")}</TableHead>
+              <TableHead>{t("dashboard.table.assignedIpv6")}</TableHead>
+              <TableHead>{t("dashboard.table.updated")}</TableHead>
+              <TableHead>{t("dashboard.table.action")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -972,12 +1036,12 @@ function DashboardScreen({
                   <StatusBadge status={request.status} />
                 </TableCell>
                 <TableCell>
-                  <code className="mono">{formatAssignedIpv6(request.assigned_ipv6)}</code>
+                  <code className="mono">{formatAssignedIpv6(request.assigned_ipv6, t)}</code>
                 </TableCell>
-                <TableCell>{formatDateTime(request.updated_at)}</TableCell>
+                <TableCell>{formatDateTime(request.updated_at, locale, t)}</TableCell>
                 <TableCell>
                   <AppLink to={`/requests/${request.id}`} className="text-link">
-                    View details
+                    {t("dashboard.table.viewDetails")}
                   </AppLink>
                 </TableCell>
               </TableRow>
@@ -996,10 +1060,13 @@ function RequestDetailScreen({
   requestId: string;
   onUnauthorized: () => void;
 }) {
+  const { t, i18n } = useTranslation();
   const [request, setRequest] = useState<JoinRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+  const locale = i18n.resolvedLanguage ?? DEFAULT_LOCALE;
 
   const loadRequest = useCallback(
     async (silent: boolean) => {
@@ -1019,7 +1086,7 @@ function RequestDetailScreen({
           return;
         }
         if (!silent) {
-          setLoadError(errorMessage(error, "Unable to load request detail."));
+          setLoadError(apiErrorMessage(error, t, "errors.fallback.requestDetail"));
         }
       } finally {
         if (!silent) {
@@ -1027,7 +1094,7 @@ function RequestDetailScreen({
         }
       }
     },
-    [onUnauthorized, requestId],
+    [onUnauthorized, requestId, t],
   );
 
   useEffect(() => {
@@ -1043,18 +1110,22 @@ function RequestDetailScreen({
 
   if (loading) {
     return (
-      <ScreenSection caption="Operator" title="Request Detail">
-        <p>Loading request data.</p>
+      <ScreenSection caption={t("requestDetail.caption")} title={t("requestDetail.title")}>
+        <p>{t("requestDetail.loading")}</p>
       </ScreenSection>
     );
   }
 
   if (loadError) {
     return (
-      <ScreenSection caption="Operator" title="Request Detail">
+      <ScreenSection caption={t("requestDetail.caption")} title={t("requestDetail.title")}>
         <InlineError
           message={loadError}
-          action={<button type="button" className="button secondary" onClick={() => void loadRequest(false)}>Retry</button>}
+          action={
+            <button type="button" className="button secondary" onClick={() => void loadRequest(false)}>
+              {t("common.retry")}
+            </button>
+          }
         />
       </ScreenSection>
     );
@@ -1062,11 +1133,15 @@ function RequestDetailScreen({
 
   if (!request) {
     return (
-      <ScreenSection caption="Operator" title="Request Detail">
+      <ScreenSection caption={t("requestDetail.caption")} title={t("requestDetail.title")}>
         <EmptyState
-          title="Request not found"
-          description="This request is unavailable or not visible to your account."
-          action={<AppLink to="/dashboard" className="button secondary">Back to dashboard</AppLink>}
+          title={t("requestDetail.empty.title")}
+          description={t("requestDetail.empty.description")}
+          action={
+            <AppLink to="/dashboard" className="button secondary">
+              {t("requestDetail.empty.backToDashboard")}
+            </AppLink>
+          }
         />
       </ScreenSection>
     );
@@ -1074,40 +1149,46 @@ function RequestDetailScreen({
 
   return (
     <ScreenSection
-      caption="Operator"
-      title="Request Detail"
+      caption={t("requestDetail.caption")}
+      title={t("requestDetail.title")}
       action={<StatusBadge status={request.status} />}
     >
       <p className="caption minor">
-        Request ID <code className="mono">{request.id}</code> | Last refresh {formatDateTime(lastUpdated)}
+        {t("requestDetail.header", {
+          requestId: request.id,
+          refreshedAt: formatDateTime(lastUpdated, locale, t),
+        })}
       </p>
       {request.status === "failed" && request.last_error ? (
-        <InlineError message={`Provisioning failed: ${request.last_error}`} />
+        <InlineError message={t("requestDetail.failed", { error: request.last_error })} />
       ) : null}
       {request.status === "rejected" && request.reject_reason ? (
-        <InlineError message={`Rejected: ${request.reject_reason}`} />
+        <InlineError message={t("requestDetail.rejected", { reason: request.reject_reason })} />
       ) : null}
 
       <DefinitionGrid
         rows={[
-          { label: "ASN", value: <code className="mono">AS{request.asn}</code> },
-          { label: "ZeroTier Network", value: <code className="mono">{request.zt_network_id}</code> },
-          { label: "Node ID", value: request.node_id ? <code className="mono">{request.node_id}</code> : "Not set" },
-          { label: "Requested", value: formatDateTime(request.requested_at) },
-          { label: "Updated", value: formatDateTime(request.updated_at) },
-          { label: "Retries", value: String(request.retry_count) },
+          { label: t("labels.asn"), value: <code className="mono">AS{request.asn}</code> },
+          { label: t("labels.network"), value: <code className="mono">{request.zt_network_id}</code> },
+          {
+            label: t("labels.nodeId"),
+            value: request.node_id ? <code className="mono">{request.node_id}</code> : t("common.notSet"),
+          },
+          { label: t("labels.requested"), value: formatDateTime(request.requested_at, locale, t) },
+          { label: t("labels.updated"), value: formatDateTime(request.updated_at, locale, t) },
+          { label: t("labels.retries"), value: String(request.retry_count) },
         ]}
       />
 
-      <h2>Membership</h2>
+      <h2>{t("requestDetail.membership.title")}</h2>
       {request.membership ? (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Member ID</TableHead>
-              <TableHead>Node</TableHead>
-              <TableHead>Authorized</TableHead>
-              <TableHead>Assigned IPs</TableHead>
+              <TableHead>{t("requestDetail.membership.memberId")}</TableHead>
+              <TableHead>{t("requestDetail.membership.node")}</TableHead>
+              <TableHead>{t("requestDetail.membership.authorized")}</TableHead>
+              <TableHead>{t("requestDetail.membership.assignedIps")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1118,25 +1199,27 @@ function RequestDetailScreen({
               <TableCell>
                 <code className="mono">{request.membership.node_id}</code>
               </TableCell>
-              <TableCell>{request.membership.is_authorized ? "Yes" : "No"}</TableCell>
+              <TableCell>
+                {request.membership.is_authorized ? t("common.yes") : t("common.no")}
+              </TableCell>
               <TableCell>
                 {request.membership.assigned_ips.length > 0
                   ? request.membership.assigned_ips.join(", ")
-                  : "Not assigned"}
+                  : t("common.notAssigned")}
               </TableCell>
             </TableRow>
           </TableBody>
         </Table>
       ) : (
         <EmptyState
-          title="No membership record yet"
-          description="Membership details appear after provisioning succeeds."
+          title={t("requestDetail.membership.empty.title")}
+          description={t("requestDetail.membership.empty.description")}
         />
       )}
 
       <div className="button-row">
         <AppLink to="/dashboard" className="button secondary">
-          Back to dashboard
+          {t("requestDetail.backToDashboard")}
         </AppLink>
       </div>
     </ScreenSection>
@@ -1148,6 +1231,7 @@ function AdminRequestsScreen({
 }: {
   onUnauthorized: () => void;
 }) {
+  const { t, i18n } = useTranslation();
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "">("");
   const [asnFilter, setAsnFilter] = useState("");
   const [networkFilter, setNetworkFilter] = useState("");
@@ -1158,6 +1242,8 @@ function AdminRequestsScreen({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+  const locale = i18n.resolvedLanguage ?? DEFAULT_LOCALE;
 
   const loadRequests = useCallback(
     async (silent: boolean, filters: AdminRequestFilters) => {
@@ -1177,7 +1263,7 @@ function AdminRequestsScreen({
           return;
         }
         if (!silent) {
-          setLoadError(errorMessage(error, "Unable to load admin queue."));
+          setLoadError(apiErrorMessage(error, t, "errors.fallback.adminQueue"));
         }
       } finally {
         if (!silent) {
@@ -1185,7 +1271,7 @@ function AdminRequestsScreen({
         }
       }
     },
-    [onUnauthorized],
+    [onUnauthorized, t],
   );
 
   useEffect(() => {
@@ -1233,18 +1319,26 @@ function AdminRequestsScreen({
 
   if (loading) {
     return (
-      <ScreenSection caption="Admin" title="Request Queue">
-        <p>Loading admin queue.</p>
+      <ScreenSection caption={t("adminQueue.caption")} title={t("adminQueue.title")}>
+        <p>{t("adminQueue.loading")}</p>
       </ScreenSection>
     );
   }
 
   if (loadError) {
     return (
-      <ScreenSection caption="Admin" title="Request Queue">
+      <ScreenSection caption={t("adminQueue.caption")} title={t("adminQueue.title")}>
         <InlineError
           message={loadError}
-          action={<button type="button" className="button secondary" onClick={() => void loadRequests(false, appliedFilters)}>Retry</button>}
+          action={
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => void loadRequests(false, appliedFilters)}
+            >
+              {t("common.retry")}
+            </button>
+          }
         />
       </ScreenSection>
     );
@@ -1252,90 +1346,97 @@ function AdminRequestsScreen({
 
   return (
     <ScreenSection
-      caption="Admin"
-      title="Request Queue"
+      caption={t("adminQueue.caption")}
+      title={t("adminQueue.title")}
       action={
         <button
           type="button"
           className="button secondary"
           onClick={() => void loadRequests(false, appliedFilters)}
         >
-          Refresh
+          {t("common.refresh")}
         </button>
       }
     >
       <form className="filter-grid" onSubmit={applyFilters}>
         <label>
-          Status
+          {t("adminQueue.filters.status")}
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.currentTarget.value as RequestStatus | "")}
           >
-            <option value="">All</option>
+            <option value="">{t("adminQueue.filters.all")}</option>
             {STATUS_ORDER.map((status) => (
               <option key={status} value={status}>
-                {statusLabel(status)}
+                {statusLabel(status, t)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          ASN
+          {t("adminQueue.filters.asn")}
           <input
             value={asnFilter}
             onChange={(event) => setAsnFilter(event.currentTarget.value)}
-            placeholder="64512"
+            placeholder={t("adminQueue.filters.asnPlaceholder")}
           />
         </label>
         <label>
-          ZeroTier Network
+          {t("adminQueue.filters.network")}
           <input
             value={networkFilter}
             onChange={(event) => setNetworkFilter(event.currentTarget.value)}
-            placeholder="abcdef0123456789"
+            placeholder={t("adminQueue.filters.networkPlaceholder")}
           />
         </label>
         <label>
-          Minimum age (minutes)
+          {t("adminQueue.filters.minAge")}
           <input
             value={minAgeFilter}
             onChange={(event) => setMinAgeFilter(event.currentTarget.value)}
-            placeholder="30"
+            placeholder={t("adminQueue.filters.minAgePlaceholder")}
           />
         </label>
         <div className="button-row">
           <button type="submit" className="button primary">
-            Apply filters
+            {t("adminQueue.filters.apply")}
           </button>
           <button type="button" className="button secondary" onClick={clearFilters}>
-            Clear
+            {t("adminQueue.filters.clear")}
           </button>
         </div>
       </form>
 
       <p className="caption minor">
-        Polling every {ADMIN_POLL_INTERVAL_MS / 1000}s. Last refresh: {formatDateTime(lastUpdated)}
+        {t("adminQueue.polling", {
+          seconds: ADMIN_POLL_INTERVAL_MS / 1000,
+          refreshedAt: formatDateTime(lastUpdated, locale, t),
+        })}
       </p>
 
       {requests.length === 0 ? (
         <EmptyState
-          title="No requests found"
-          description="No requests match the current filter criteria."
-          action={<button type="button" className="button secondary" onClick={clearFilters}>Reset filters</button>}
+          title={t("adminQueue.empty.title")}
+          description={t("adminQueue.empty.description")}
+          action={
+            <button type="button" className="button secondary" onClick={clearFilters}>
+              {t("adminQueue.empty.reset")}
+            </button>
+          }
         />
       ) : (
         <Table>
-          <TableCaption>Admin request queue</TableCaption>
+          <TableCaption>{t("adminQueue.table.caption")}</TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead>Request</TableHead>
-              <TableHead>ASN</TableHead>
-              <TableHead>Network</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>User</TableHead>
-              <TableHead>Assigned IPv6</TableHead>
-              <TableHead>Updated</TableHead>
-              <TableHead>Action</TableHead>
+              <TableHead>{t("adminQueue.table.request")}</TableHead>
+              <TableHead>{t("adminQueue.table.asn")}</TableHead>
+              <TableHead>{t("adminQueue.table.network")}</TableHead>
+              <TableHead>{t("adminQueue.table.status")}</TableHead>
+              <TableHead>{t("adminQueue.table.user")}</TableHead>
+              <TableHead>{t("adminQueue.table.assignedIpv6")}</TableHead>
+              <TableHead>{t("adminQueue.table.updated")}</TableHead>
+              <TableHead>{t("adminQueue.table.action")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1357,12 +1458,12 @@ function AdminRequestsScreen({
                   <code className="mono">{request.user_id}</code>
                 </TableCell>
                 <TableCell>
-                  <code className="mono">{formatAssignedIpv6(request.assigned_ipv6)}</code>
+                  <code className="mono">{formatAssignedIpv6(request.assigned_ipv6, t)}</code>
                 </TableCell>
-                <TableCell>{formatDateTime(request.updated_at)}</TableCell>
+                <TableCell>{formatDateTime(request.updated_at, locale, t)}</TableCell>
                 <TableCell>
                   <AppLink to={`/admin/requests/${request.id}`} className="text-link">
-                    Review
+                    {t("adminQueue.table.review")}
                   </AppLink>
                 </TableCell>
               </TableRow>
@@ -1381,6 +1482,7 @@ function AdminRequestDetailScreen({
   requestId: string;
   onUnauthorized: () => void;
 }) {
+  const { t, i18n } = useTranslation();
   const [detail, setDetail] = useState<AdminRequestDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -1388,6 +1490,8 @@ function AdminRequestDetailScreen({
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+
+  const locale = i18n.resolvedLanguage ?? DEFAULT_LOCALE;
 
   const loadDetail = useCallback(
     async (silent: boolean) => {
@@ -1406,7 +1510,7 @@ function AdminRequestDetailScreen({
           return;
         }
         if (!silent) {
-          setLoadError(errorMessage(error, "Unable to load admin request detail."));
+          setLoadError(apiErrorMessage(error, t, "errors.fallback.adminDetail"));
         }
       } finally {
         if (!silent) {
@@ -1414,7 +1518,7 @@ function AdminRequestDetailScreen({
         }
       }
     },
-    [onUnauthorized, requestId],
+    [onUnauthorized, requestId, t],
   );
 
   useEffect(() => {
@@ -1435,7 +1539,7 @@ function AdminRequestDetailScreen({
       }
 
       if (action === "reject" && !rejectReason.trim()) {
-        setActionError("Reject reason is required.");
+        setActionError(t("adminReview.validation.rejectReasonRequired"));
         return;
       }
 
@@ -1446,40 +1550,44 @@ function AdminRequestDetailScreen({
       try {
         if (action === "approve") {
           await api.approveRequest(detail.request.id);
-          setActionInfo("Request approved and queued for provisioning.");
+          setActionInfo(t("adminReview.actions.approveSuccess"));
         } else if (action === "retry") {
           await api.retryRequest(detail.request.id);
-          setActionInfo("Retry queued from failed state.");
+          setActionInfo(t("adminReview.actions.retrySuccess"));
         } else {
           await api.rejectRequest(detail.request.id, rejectReason.trim());
-          setActionInfo("Request rejected.");
+          setActionInfo(t("adminReview.actions.rejectSuccess"));
           setRejectReason("");
         }
 
         await loadDetail(true);
       } catch (error) {
-        setActionError(errorMessage(error, "Admin action failed."));
+        setActionError(apiErrorMessage(error, t, "errors.fallback.adminAction"));
       } finally {
         setActionBusy(false);
       }
     },
-    [detail, loadDetail, rejectReason],
+    [detail, loadDetail, rejectReason, t],
   );
 
   if (loading) {
     return (
-      <ScreenSection caption="Admin" title="Request Review">
-        <p>Loading request detail.</p>
+      <ScreenSection caption={t("adminReview.caption")} title={t("adminReview.title")}>
+        <p>{t("adminReview.loading")}</p>
       </ScreenSection>
     );
   }
 
   if (loadError) {
     return (
-      <ScreenSection caption="Admin" title="Request Review">
+      <ScreenSection caption={t("adminReview.caption")} title={t("adminReview.title")}>
         <InlineError
           message={loadError}
-          action={<button type="button" className="button secondary" onClick={() => void loadDetail(false)}>Retry</button>}
+          action={
+            <button type="button" className="button secondary" onClick={() => void loadDetail(false)}>
+              {t("common.retry")}
+            </button>
+          }
         />
       </ScreenSection>
     );
@@ -1487,11 +1595,15 @@ function AdminRequestDetailScreen({
 
   if (!detail) {
     return (
-      <ScreenSection caption="Admin" title="Request Review">
+      <ScreenSection caption={t("adminReview.caption")} title={t("adminReview.title")}>
         <EmptyState
-          title="Request unavailable"
-          description="This request was not found."
-          action={<AppLink to="/admin/requests" className="button secondary">Back to admin queue</AppLink>}
+          title={t("adminReview.empty.title")}
+          description={t("adminReview.empty.description")}
+          action={
+            <AppLink to="/admin/requests" className="button secondary">
+              {t("adminReview.empty.backToQueue")}
+            </AppLink>
+          }
         />
       </ScreenSection>
     );
@@ -1504,32 +1616,30 @@ function AdminRequestDetailScreen({
 
   return (
     <ScreenSection
-      caption="Admin"
-      title="Request Review"
+      caption={t("adminReview.caption")}
+      title={t("adminReview.title")}
       action={<StatusBadge status={request.status} />}
     >
-      <p className="caption minor">
-        Reviewing <code className="mono">{request.id}</code>
-      </p>
+      <p className="caption minor">{t("adminReview.header", { requestId: request.id })}</p>
       {actionError ? <InlineError message={actionError} /> : null}
       {actionInfo ? <InlineInfo message={actionInfo} /> : null}
 
       <DefinitionGrid
         rows={[
-          { label: "ASN", value: <code className="mono">AS{request.asn}</code> },
-          { label: "ZeroTier Network", value: <code className="mono">{request.zt_network_id}</code> },
-          { label: "Submitted", value: formatDateTime(request.requested_at) },
-          { label: "Last Updated", value: formatDateTime(request.updated_at) },
-          { label: "Retry Count", value: String(request.retry_count) },
+          { label: t("labels.asn"), value: <code className="mono">AS{request.asn}</code> },
+          { label: t("labels.network"), value: <code className="mono">{request.zt_network_id}</code> },
+          { label: t("adminReview.labels.submitted"), value: formatDateTime(request.requested_at, locale, t) },
+          { label: t("adminReview.labels.updated"), value: formatDateTime(request.updated_at, locale, t) },
+          { label: t("adminReview.labels.retryCount"), value: String(request.retry_count) },
           {
-            label: "Last Error",
-            value: request.last_error ? request.last_error : "No error recorded",
+            label: t("adminReview.labels.lastError"),
+            value: request.last_error ? request.last_error : t("adminReview.labels.noError"),
           },
         ]}
       />
 
       <div className="action-panel">
-        <h2>Actions</h2>
+        <h2>{t("adminReview.actions.title")}</h2>
         <div className="button-row">
           <button
             type="button"
@@ -1537,7 +1647,7 @@ function AdminRequestDetailScreen({
             disabled={actionBusy || !canApprove}
             onClick={() => void performAction("approve")}
           >
-            Approve
+            {t("adminReview.actions.approve")}
           </button>
           <button
             type="button"
@@ -1545,16 +1655,16 @@ function AdminRequestDetailScreen({
             disabled={actionBusy || !canRetry}
             onClick={() => void performAction("retry")}
           >
-            Retry
+            {t("adminReview.actions.retry")}
           </button>
         </div>
         <label>
-          Reject reason
+          {t("adminReview.actions.rejectReason")}
           <textarea
             value={rejectReason}
             onChange={(event) => setRejectReason(event.currentTarget.value)}
             rows={3}
-            placeholder="Policy mismatch, incomplete data, etc."
+            placeholder={t("adminReview.actions.rejectPlaceholder")}
             disabled={actionBusy || !canReject}
           />
         </label>
@@ -1564,34 +1674,34 @@ function AdminRequestDetailScreen({
           disabled={actionBusy || !canReject}
           onClick={() => void performAction("reject")}
         >
-          Reject
+          {t("adminReview.actions.reject")}
         </button>
       </div>
 
-      <h2>Audit Events</h2>
+      <h2>{t("adminReview.audit.title")}</h2>
       {detail.audit_events.length === 0 ? (
         <EmptyState
-          title="No audit events"
-          description="Audit timeline is currently empty for this request."
+          title={t("adminReview.audit.empty.title")}
+          description={t("adminReview.audit.empty.description")}
         />
       ) : (
         <Table>
-          <TableCaption>Request audit events</TableCaption>
+          <TableCaption>{t("adminReview.audit.caption")}</TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead>Time</TableHead>
-              <TableHead>Action</TableHead>
-              <TableHead>Actor</TableHead>
-              <TableHead>Metadata</TableHead>
+              <TableHead>{t("adminReview.audit.table.time")}</TableHead>
+              <TableHead>{t("adminReview.audit.table.action")}</TableHead>
+              <TableHead>{t("adminReview.audit.table.actor")}</TableHead>
+              <TableHead>{t("adminReview.audit.table.metadata")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {detail.audit_events.map((event, index) => (
               <TableRow key={event.id} className={`stagger-row-${Math.min(index + 1, 8)}`}>
-                <TableCell>{formatDateTime(event.created_at)}</TableCell>
+                <TableCell>{formatDateTime(event.created_at, locale, t)}</TableCell>
                 <TableCell>{event.action}</TableCell>
                 <TableCell>
-                  {event.actor_user_id ? <code className="mono">{event.actor_user_id}</code> : "system"}
+                  {event.actor_user_id ? <code className="mono">{event.actor_user_id}</code> : t("common.system")}
                 </TableCell>
                 <TableCell>
                   <code className="mono metadata">{JSON.stringify(event.metadata)}</code>
@@ -1604,7 +1714,7 @@ function AdminRequestDetailScreen({
 
       <div className="button-row">
         <AppLink to="/admin/requests" className="button secondary">
-          Back to admin queue
+          {t("adminReview.backToQueue")}
         </AppLink>
       </div>
     </ScreenSection>
@@ -1612,23 +1722,35 @@ function AdminRequestDetailScreen({
 }
 
 function NotFoundScreen() {
+  const { t } = useTranslation();
+
   return (
-    <ScreenSection caption="Routing" title="Path Not Found">
+    <ScreenSection caption={t("notFound.caption")} title={t("notFound.title")}>
       <EmptyState
-        title="Unknown route"
-        description="This path is outside the current SPA route set."
-        action={<AppLink to="/" className="button secondary">Back home</AppLink>}
+        title={t("notFound.empty.title")}
+        description={t("notFound.empty.description")}
+        action={
+          <AppLink to="/" className="button secondary">
+            {t("notFound.empty.backHome")}
+          </AppLink>
+        }
       />
     </ScreenSection>
   );
 }
 
 function ForbiddenScreen() {
+  const { t } = useTranslation();
+
   return (
-    <ScreenSection caption="Access" title="Admin Access Required">
+    <ScreenSection caption={t("forbidden.caption")} title={t("forbidden.title")}>
       <InlineError
-        message="Your current session does not have admin privileges for /admin routes."
-        action={<AppLink to="/dashboard" className="button secondary">Open dashboard</AppLink>}
+        message={t("forbidden.message")}
+        action={
+          <AppLink to="/dashboard" className="button secondary">
+            {t("forbidden.openDashboard")}
+          </AppLink>
+        }
       />
     </ScreenSection>
   );
@@ -1641,13 +1763,15 @@ function SessionErrorScreen({
   message: string;
   onRetry: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
+
   return (
-    <ScreenSection caption="Session" title="Unable to Validate Session">
+    <ScreenSection caption={t("session.caption")} title={t("session.errorTitle")}>
       <InlineError
         message={message}
         action={
           <button type="button" className="button secondary" onClick={() => void onRetry()}>
-            Retry session check
+            {t("session.retry")}
           </button>
         }
       />
@@ -1656,12 +1780,17 @@ function SessionErrorScreen({
 }
 
 export function App() {
+  const { t, i18n } = useTranslation();
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [session, setSession] = useState<SessionState>({ status: "loading" });
   const [logoutBusy, setLogoutBusy] = useState(false);
 
   const matchedRoute = useMemo(() => matchRoute(pathname), [pathname]);
+
+  useEffect(() => {
+    document.title = branding.appName;
+  }, []);
 
   useEffect(() => {
     const onLocationChange = () => {
@@ -1689,9 +1818,9 @@ export function App() {
         setSession({ status: "unauthenticated" });
         return;
       }
-      setSession({ status: "error", message: errorMessage(error, "Session check failed.") });
+      setSession({ status: "error", message: apiErrorMessage(error, t, "errors.fallback.sessionCheck") });
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void refreshSession();
@@ -1731,21 +1860,23 @@ export function App() {
   const isAdmin = isAuthenticated && session.user.is_admin;
 
   const navItems = useMemo(() => {
-    const items: NavItem[] = [{ label: "Home", path: "/" }];
+    const items: NavItem[] = [{ labelKey: "nav.home", path: "/" }];
 
     if (!isAuthenticated) {
-      items.push({ label: "Login", path: "/login" });
+      items.push({ labelKey: "nav.login", path: "/login" });
       return items;
     }
 
-    items.push({ label: "Onboarding", path: "/onboarding" });
-    items.push({ label: "Dashboard", path: "/dashboard" });
+    items.push({ labelKey: "nav.onboarding", path: "/onboarding" });
+    items.push({ labelKey: "nav.dashboard", path: "/dashboard" });
     if (isAdmin) {
-      items.push({ label: "Admin Queue", path: "/admin/requests" });
+      items.push({ labelKey: "nav.adminQueue", path: "/admin/requests" });
     }
 
     return items;
   }, [isAdmin, isAuthenticated]);
+
+  const currentLocale = resolveSupportedLocale(i18n.resolvedLanguage) ?? DEFAULT_LOCALE;
 
   let content: ReactNode = <NotFoundScreen />;
 
@@ -1753,8 +1884,8 @@ export function App() {
     content = <NotFoundScreen />;
   } else if (matchedRoute.route.requiresAuth && session.status === "loading") {
     content = (
-      <ScreenSection caption="Session" title="Loading">
-        <p>Validating session before opening this route.</p>
+      <ScreenSection caption={t("session.caption")} title={t("session.loadingTitle")}>
+        <p>{t("session.loadingRoute")}</p>
       </ScreenSection>
     );
   } else if (matchedRoute.route.requiresAuth && session.status === "error") {
@@ -1802,16 +1933,26 @@ export function App() {
     }
   }
 
+  const sessionChipText =
+    session.status === "authenticated"
+      ? t("shell.sessionUser", { username: session.user.username })
+      : t(`session.states.${session.status}`);
+
   return (
     <div className="app-canvas">
       <div className="shell-grid">
         <aside className={cx("sidebar", mobileNavOpen && "open")}>
           <div className="brand-block">
-            <p className="caption">ZT-IX</p>
-            <h2>Operational Console</h2>
-            <p className="muted">Phase 11 workflow routes</p>
+            <div className="brand-identity">
+              <img src={branding.logoPath} alt={t("shell.logoAlt", { name: branding.appName })} className="brand-logo" />
+              <div>
+                <p className="caption">{branding.shortName}</p>
+                <h2>{branding.appName}</h2>
+              </div>
+            </div>
+            <p className="muted">{t("shell.brandSummary")}</p>
           </div>
-          <nav id="primary-navigation" aria-label="Primary" className="nav-list">
+          <nav id="primary-navigation" aria-label={t("shell.primaryNavigation")} className="nav-list">
             {navItems.map((item, index) => {
               const active =
                 item.path === "/"
@@ -1825,7 +1966,7 @@ export function App() {
                   onNavigate={() => setMobileNavOpen(false)}
                 >
                   <span className="nav-index">{String(index + 1).padStart(2, "0")}</span>
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                 </AppLink>
               );
             })}
@@ -1841,13 +1982,38 @@ export function App() {
               aria-expanded={mobileNavOpen}
               aria-controls="primary-navigation"
             >
-              Menu
+              {t("shell.menu")}
             </button>
             <div className="topbar-meta">
-              <span className="topbar-chip">
-                {session.status === "authenticated" ? `@${session.user.username}` : session.status}
-              </span>
-              <code className="mono">{pathname}</code>
+              <div className="language-control">
+                <label htmlFor="language-switcher" className="language-label">
+                  {t("language.label")}
+                </label>
+                <select
+                  id="language-switcher"
+                  className="language-select"
+                  value={currentLocale}
+                  onChange={(event) => {
+                    const nextLocale = resolveSupportedLocale(event.currentTarget.value) as
+                      | SupportedLocale
+                      | undefined;
+                    if (nextLocale && nextLocale !== currentLocale) {
+                      void i18n.changeLanguage(nextLocale);
+                    }
+                  }}
+                >
+                  {LOCALE_OPTIONS.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {t("language.option", {
+                        flag: option.flag,
+                        name: t(`language.names.${option.code}`),
+                      })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <span className="topbar-chip">{sessionChipText}</span>
+              <span className="topbar-chip">{t("shell.path", { path: pathname })}</span>
               {isAuthenticated ? (
                 <button
                   type="button"
@@ -1855,13 +2021,30 @@ export function App() {
                   onClick={() => void handleLogout()}
                   disabled={logoutBusy}
                 >
-                  {logoutBusy ? "Signing out..." : "Logout"}
+                  {logoutBusy ? t("shell.logoutBusy") : t("shell.logout")}
                 </button>
               ) : null}
             </div>
           </header>
 
           {content}
+
+          <footer className="app-footer">
+            <a className="text-link" href={branding.supportUrl}>
+              {t("shell.support")}
+            </a>
+            {branding.footerGithubUrl ? (
+              <a
+                className="text-link"
+                href={branding.footerGithubUrl}
+                target={isHttpUrl(branding.footerGithubUrl) ? "_blank" : undefined}
+                rel={isHttpUrl(branding.footerGithubUrl) ? "noreferrer" : undefined}
+              >
+                {t("shell.github")}
+              </a>
+            ) : null}
+            <span className="muted">{branding.footerText}</span>
+          </footer>
         </main>
       </div>
     </div>

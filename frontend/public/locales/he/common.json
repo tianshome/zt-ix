@@ -1,0 +1,330 @@
+{
+  "language": {
+    "label": "שפה",
+    "option": "{{flag}} {{name}}",
+    "names": {
+      "en-US": "אנגלית (ארה\"ב)",
+      "zh-CN": "סינית (מפושטת)",
+      "he": "עברית"
+    }
+  },
+  "status": {
+    "pending": "ממתין",
+    "approved": "אושר",
+    "provisioning": "בהקצאה",
+    "active": "פעיל",
+    "rejected": "נדחה",
+    "failed": "נכשל"
+  },
+  "roles": {
+    "admin": "מנהל",
+    "operator": "מפעיל"
+  },
+  "common": {
+    "retry": "נסה שוב",
+    "reload": "טען מחדש",
+    "refresh": "רענן",
+    "continue": "המשך",
+    "notAvailable": "לא זמין",
+    "notSet": "לא הוגדר",
+    "unassigned": "לא הוקצה",
+    "notAssigned": "לא הוקצה",
+    "yes": "כן",
+    "no": "לא",
+    "system": "מערכת"
+  },
+  "labels": {
+    "userId": "מזהה משתמש",
+    "role": "תפקיד",
+    "linkedAsns": "מספר ASN מקושרים",
+    "asn": "ASN",
+    "network": "רשת ZeroTier",
+    "nodeId": "מזהה צומת",
+    "requested": "נשלח בתאריך",
+    "updated": "עודכן בתאריך",
+    "retries": "מספר ניסיונות חוזרים"
+  },
+  "errors": {
+    "fallback": {
+      "localLogin": "לא ניתן להתחבר עם פרטי התחברות מקומיים.",
+      "oauthStart": "לא ניתן להתחיל התחברות PeeringDB.",
+      "oauthCallback": "לא ניתן להשלים התחברות PeeringDB.",
+      "onboardingContext": "לא ניתן לטעון את פרטי ההצטרפות.",
+      "onboardingCreate": "לא ניתן ליצור את הבקשה.",
+      "requestsList": "לא ניתן לטעון את רשימת הבקשות.",
+      "requestDetail": "לא ניתן לטעון את פרטי הבקשה.",
+      "adminQueue": "לא ניתן לטעון את תור המנהל.",
+      "adminDetail": "לא ניתן לטעון את פרטי המנהל.",
+      "adminAction": "לא ניתן להשלים פעולת מנהל.",
+      "sessionCheck": "לא ניתן לאמת את הסשן הנוכחי."
+    },
+    "api": {
+      "network_error": "חיבור הרשת נכשל. נסה שוב.",
+      "invalid_response": "התקבלה תגובה לא תקינה מהשירות.",
+      "request_failed": "הבקשה לא הושלמה.",
+      "duplicate_active_request": "כבר קיימת בקשה פעילה תואמת.",
+      "invalid_credentials": "שם משתמש או סיסמה שגויים.",
+      "credential_disabled": "החשבון מושבת. פנה לתמיכה.",
+      "local_auth_disabled": "התחברות מקומית מושבתת.",
+      "invalid_state": "מצב ההתחברות אינו תקף. התחל התחברות מחדש.",
+      "expired_state": "מצב ההתחברות פג תוקף. התחל התחברות מחדש.",
+      "invalid_nonce": "אימות אבטחה נכשל. התחל התחברות מחדש.",
+      "upstream_auth_failure": "אימות PeeringDB נכשל. נסה שוב.",
+      "validation_error": "חלק מהנתונים אינם תקינים. בדוק ונסה שוב.",
+      "not_found": "הפריט המבוקש לא נמצא.",
+      "forbidden": "אין לך הרשאה לביצוע פעולה זו.",
+      "conflict": "הבקשה מתנגשת עם המצב הנוכחי.",
+      "unauthorized": "יש להתחבר מחדש כדי להמשיך."
+    }
+  },
+  "nav": {
+    "home": "בית",
+    "login": "התחברות",
+    "onboarding": "הצטרפות",
+    "dashboard": "לוח בקרה",
+    "adminQueue": "תור מנהל"
+  },
+  "shell": {
+    "logoAlt": "לוגו {{name}}",
+    "brandSummary": "ניהול בקשות גישה לרשת עם עדכוני סטטוס ברורים.",
+    "primaryNavigation": "ניווט ראשי",
+    "menu": "תפריט",
+    "path": "נתיב: {{path}}",
+    "sessionUser": "@{{username}}",
+    "logout": "התנתקות",
+    "logoutBusy": "מתנתק...",
+    "support": "תמיכה",
+    "github": "GitHub"
+  },
+  "session": {
+    "caption": "סשן",
+    "loadingTitle": "טעינה",
+    "loadingRoute": "מאמתים את הסשן לפני פתיחת העמוד.",
+    "errorTitle": "לא ניתן לאמת סשן",
+    "retry": "נסה שוב אימות סשן",
+    "states": {
+      "loading": "טוען",
+      "unauthenticated": "לא מחובר",
+      "error": "שגיאת סשן"
+    }
+  },
+  "home": {
+    "caption": "ברוכים הבאים",
+    "loading": "טוען מצב סשן.",
+    "openLogin": "פתח התחברות",
+    "unauthenticatedMessage": "התחבר כדי לבקש גישת Peering ולעקוב אחר מצב הבקשה.",
+    "signedInTitle": "מחובר",
+    "signedInMessage": "מחובר בתור {{username}}. אפשר להמשיך להצטרפות או לבדוק סטטוס בקשות.",
+    "goToOnboarding": "פתח הצטרפות",
+    "goToDashboard": "פתח לוח בקרה",
+    "goToAdminQueue": "פתח תור מנהל"
+  },
+  "login": {
+    "caption": "התחברות",
+    "title": "התחברות",
+    "checkingSession": "בודק סשן קיים.",
+    "alreadySignedInTitle": "כבר מחובר",
+    "alreadySignedInMessage": "אתה כבר מחובר בתור {{username}}.",
+    "goToDashboard": "עבור ללוח הבקרה",
+    "lead": "בחר את שיטת ההתחברות. הודעות שגיאה מוצגות בעמוד זה.",
+    "oauth": {
+      "title": "התחברות PeeringDB",
+      "description": "התחבר עם חשבון PeeringDB וחזור לאחר האישור.",
+      "cta": "המשך עם PeeringDB",
+      "busy": "מפנה..."
+    },
+    "local": {
+      "title": "פרטי התחברות מקומיים",
+      "username": "שם משתמש",
+      "password": "סיסמה",
+      "cta": "התחבר",
+      "busy": "מתחבר..."
+    }
+  },
+  "authCallback": {
+    "caption": "התחברות",
+    "title": "קריאת חזרה מ-PeeringDB",
+    "backToLogin": "חזרה להתחברות",
+    "detailCode": "קוד פירוט: {{code}}",
+    "messages": {
+      "processing": "מעבד קריאת חזרה מ-PeeringDB.",
+      "missingParameters": "חסרים פרמטרים בקריאת החזרה. התחל התחברות מחדש.",
+      "success": "התחברות הצליחה. מעביר לעמוד ההצטרפות."
+    }
+  },
+  "onboarding": {
+    "caption": "הצטרפות",
+    "title": "בקשת גישת רשת",
+    "loading": "טוען ASN ורשתות זמינות.",
+    "lead": "שלח פרטי ASN ורשת יעד כדי לבקש גישה.",
+    "openExistingRequest": "פתח בקשה קיימת",
+    "restrictions": "מגבלות רשת פעילות: {{networks}}",
+    "validation": {
+      "invalidAsn": "יש להזין ASN תקין."
+    },
+    "emptyContext": {
+      "title": "פרטי ההצטרפות אינם זמינים",
+      "description": "לא ניתן לטעון את נתוני ההצטרפות לחשבון זה."
+    },
+    "noEligibleAsn": {
+      "title": "אין ASN זמין",
+      "description": "לחשבון זה אין כרגע ASN מתאים. פנה לתמיכה.",
+      "openDashboard": "פתח לוח בקרה"
+    },
+    "form": {
+      "asn": "ASN",
+      "network": "רשת ZeroTier יעד",
+      "nodeId": "מזהה צומת (לקוח ZeroTier שלך)",
+      "nodeIdPlaceholder": "abcde12345",
+      "notes": "הערות (אופציונלי)",
+      "notesPlaceholder": "הוסף מידע שיסייע לבודקים",
+      "submit": "שלח בקשה",
+      "submitting": "שולח...",
+      "goToDashboard": "עבור ללוח הבקרה"
+    }
+  },
+  "dashboard": {
+    "caption": "מפעיל",
+    "title": "סטטוס בקשות",
+    "loading": "טוען את הבקשות שלך.",
+    "polling": "עדכון כל {{seconds}} שניות. רענון אחרון: {{refreshedAt}}",
+    "empty": {
+      "title": "אין עדיין בקשות",
+      "description": "צור בקשה ראשונה כדי להתחיל בתהליך ההקצאה.",
+      "start": "התחל הצטרפות"
+    },
+    "table": {
+      "caption": "רשימת בקשות מפעיל",
+      "request": "בקשה",
+      "asn": "ASN",
+      "network": "רשת",
+      "status": "סטטוס",
+      "assignedIpv6": "IPv6 שהוקצה",
+      "updated": "עודכן",
+      "action": "פעולה",
+      "viewDetails": "הצג פרטים"
+    }
+  },
+  "requestDetail": {
+    "caption": "מפעיל",
+    "title": "פרטי בקשה",
+    "loading": "טוען פרטי בקשה.",
+    "header": "מזהה בקשה {{requestId}} | רענון אחרון {{refreshedAt}}",
+    "failed": "הקצאה נכשלה: {{error}}",
+    "rejected": "נדחה: {{reason}}",
+    "backToDashboard": "חזרה ללוח הבקרה",
+    "empty": {
+      "title": "הבקשה לא נמצאה",
+      "description": "בקשה זו אינה זמינה או שאינה גלויה לחשבון שלך.",
+      "backToDashboard": "חזרה ללוח הבקרה"
+    },
+    "membership": {
+      "title": "חברות",
+      "memberId": "מזהה חבר",
+      "node": "צומת",
+      "authorized": "מורשה",
+      "assignedIps": "כתובות IP שהוקצו",
+      "empty": {
+        "title": "עדיין אין רשומת חברות",
+        "description": "פרטי חברות יוצגו לאחר שההקצאה תצליח."
+      }
+    }
+  },
+  "adminQueue": {
+    "caption": "מנהל",
+    "title": "תור בקשות",
+    "loading": "טוען תור מנהל.",
+    "polling": "עדכון כל {{seconds}} שניות. רענון אחרון: {{refreshedAt}}",
+    "filters": {
+      "status": "סטטוס",
+      "all": "הכול",
+      "asn": "ASN",
+      "asnPlaceholder": "64512",
+      "network": "רשת ZeroTier",
+      "networkPlaceholder": "abcdef0123456789",
+      "minAge": "גיל מינימלי (בדקות)",
+      "minAgePlaceholder": "30",
+      "apply": "החל מסננים",
+      "clear": "נקה"
+    },
+    "empty": {
+      "title": "לא נמצאו בקשות",
+      "description": "אין בקשות התואמות למסננים הנוכחיים.",
+      "reset": "אפס מסננים"
+    },
+    "table": {
+      "caption": "תור בקשות מנהל",
+      "request": "בקשה",
+      "asn": "ASN",
+      "network": "רשת",
+      "status": "סטטוס",
+      "user": "משתמש",
+      "assignedIpv6": "IPv6 שהוקצה",
+      "updated": "עודכן",
+      "action": "פעולה",
+      "review": "בדיקה"
+    }
+  },
+  "adminReview": {
+    "caption": "מנהל",
+    "title": "בדיקת בקשה",
+    "loading": "טוען פרטי בקשה.",
+    "header": "בודק {{requestId}}",
+    "backToQueue": "חזרה לתור המנהל",
+    "validation": {
+      "rejectReasonRequired": "סיבת דחייה היא שדה חובה."
+    },
+    "labels": {
+      "submitted": "נשלח בתאריך",
+      "updated": "עודכן לאחרונה",
+      "retryCount": "מספר ניסיונות חוזרים",
+      "lastError": "שגיאה אחרונה",
+      "noError": "אין שגיאה מתועדת"
+    },
+    "actions": {
+      "title": "פעולות",
+      "approve": "אישור",
+      "retry": "נסה שוב",
+      "reject": "דחייה",
+      "rejectReason": "סיבת דחייה",
+      "rejectPlaceholder": "הסבר מדוע הבקשה נדחית",
+      "approveSuccess": "הבקשה אושרה והוכנסה לתור הקצאה.",
+      "retrySuccess": "ניסיון חוזר הוכנס לתור ממצב כשל.",
+      "rejectSuccess": "הבקשה נדחתה."
+    },
+    "audit": {
+      "title": "אירועי ביקורת",
+      "caption": "אירועי ביקורת לבקשה",
+      "empty": {
+        "title": "אין אירועי ביקורת",
+        "description": "ציר הזמן של הביקורת ריק עבור בקשה זו."
+      },
+      "table": {
+        "time": "זמן",
+        "action": "פעולה",
+        "actor": "מבצע",
+        "metadata": "מטא-דאטה"
+      }
+    },
+    "empty": {
+      "title": "הבקשה אינה זמינה",
+      "description": "הבקשה לא נמצאה.",
+      "backToQueue": "חזרה לתור המנהל"
+    }
+  },
+  "notFound": {
+    "caption": "ניווט",
+    "title": "העמוד לא נמצא",
+    "empty": {
+      "title": "נתיב לא מוכר",
+      "description": "נתיב זה מחוץ לנתיבי האפליקציה הנוכחיים.",
+      "backHome": "חזרה לבית"
+    }
+  },
+  "forbidden": {
+    "caption": "גישה",
+    "title": "נדרשת הרשאת מנהל",
+    "message": "לסשן הנוכחי אין הרשאת מנהל עבור נתיב זה.",
+    "openDashboard": "פתח לוח בקרה"
+  }
+}

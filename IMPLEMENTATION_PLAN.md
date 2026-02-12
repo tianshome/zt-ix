@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 2.6
+Version: 2.7
 Date: 2026-02-12
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -9,7 +9,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - `[ ]` open and not yet implemented.
 - `[ ]` + `Blocked by` + `Reason` marks an explicitly blocked gap that must be revisited when the dependency is complete.
 
-## 0.1 Current Status Snapshot (through Phase 10 implementation)
+## 0.1 Current Status Snapshot (through Phase 11 Step 11.8 implementation)
 - [x] Phase 1 bootstrap is complete.
 - [x] Phase 2 data/migration foundation is complete.
 - [x] Phase 3 auth integration (Auth Option A + Auth Option B) is complete for automated coverage.
@@ -19,6 +19,7 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] Configurable approval mode is implemented from runtime config (`manual_admin` / `policy_auto`).
 - [x] Queue placeholder has been replaced with real async dispatch.
 - [x] SPA frontend integration for onboarding/dashboard/request/admin flows.
+- [x] Phase 11 Step 11.8 i18n + branding integration is complete (`en-US`, `zh-CN`, `he`, language switcher, RTL, compile-time branding config).
 - [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
 - [x] Self-hosted controller lifecycle canonical network-ID derivation is complete (Phase 8 Step 8.6).
 - [x] Phase 8 IPv6 deterministic member assignment extension is complete (Step 8.7 to Step 8.11).
@@ -439,7 +440,7 @@ Steps:
     - show assigned IPv6 from API/SQL-backed request association in dashboard/admin request list rows,
     - display deterministic fallback (`unassigned`) when request has no assigned IPv6 yet,
     - keep table behavior within existing MVP shadcn/Radix table patterns.
-- [ ] Step 11.8: Internationalized SPA text/message catalogs, language switcher, and build-time branding configuration.
+- [x] Step 11.8: Internationalized SPA text/message catalogs, language switcher, and build-time branding configuration.
   - Minimum behaviors:
     - detect preferred language from browser/device (`navigator.languages`, then `navigator.language`), choose the first supported locale, and fall back to the first configured locale when no match exists,
     - implement centralized translation catalogs with `react-i18next` for navigation labels, page titles, forms, statuses, and API-facing error/status message text,
@@ -464,8 +465,8 @@ Exit criteria:
 - [x] Status updates are visible via HTTP polling without manual page reloads.
 - [x] Core request/admin actions are available from SPA screens.
 - [x] Operator/admin request list tables show assigned IPv6 when available.
-- [ ] SPA supports localized interface/error/status messages for `en-US`, `zh-CN`, and `he` with browser-language matching and manual language override.
-- [ ] Frontend build can apply environment-specific branding values from compile-time configuration.
+- [x] SPA supports localized interface/error/status messages for `en-US`, `zh-CN`, and `he` with browser-language matching and manual language override.
+- [x] Frontend build can apply environment-specific branding values from compile-time configuration.
 
 Verification:
 - [x] `npm run build` (inside `frontend/`)
@@ -473,8 +474,14 @@ Verification:
 - [x] Manual polling check confirms status transition visibility without full page refresh.
 - [x] Manual table check confirms operator/admin request list rows display assigned IPv6 values from API.
 - [ ] Manual locale checks for auto-detected language fallback and header language-switcher overrides.
+  - Blocked by: external browser runtime availability in this environment.
+  - Reason: terminal-only execution environment cannot perform interactive locale-switch/browser-language validation.
 - [ ] Manual RTL check for `he` confirms directionality and layout integrity on `/login`, `/onboarding`, `/dashboard`, and `/admin/requests`.
+  - Blocked by: external browser runtime availability in this environment.
+  - Reason: terminal-only execution environment cannot perform visual RTL layout inspection.
 - [ ] Manual branding check confirms compile-time config values render in app shell/header/footer.
+  - Blocked by: external browser runtime availability in this environment.
+  - Reason: terminal-only execution environment cannot perform visual shell/header/footer branding checks.
 
 ## 14. Phase 12: Frontend MVP Validation and Deferred UX Scope
 Implements: final frontend quality gate for `v0.1.0`.

@@ -1,0 +1,330 @@
+{
+  "language": {
+    "label": "语言",
+    "option": "{{flag}} {{name}}",
+    "names": {
+      "en-US": "英语（美国）",
+      "zh-CN": "简体中文",
+      "he": "希伯来语"
+    }
+  },
+  "status": {
+    "pending": "待处理",
+    "approved": "已批准",
+    "provisioning": "开通中",
+    "active": "已启用",
+    "rejected": "已拒绝",
+    "failed": "失败"
+  },
+  "roles": {
+    "admin": "管理员",
+    "operator": "参与者"
+  },
+  "common": {
+    "retry": "重试",
+    "reload": "重新加载",
+    "refresh": "刷新",
+    "continue": "继续",
+    "notAvailable": "不可用",
+    "notSet": "未设置",
+    "unassigned": "未分配",
+    "notAssigned": "未分配",
+    "yes": "是",
+    "no": "否",
+    "system": "系统"
+  },
+  "labels": {
+    "userId": "用户 ID",
+    "role": "角色",
+    "linkedAsns": "关联 ASN 数",
+    "asn": "ASN",
+    "network": "ZeroTier 网络",
+    "nodeId": "节点 ID",
+    "requested": "提交时间",
+    "updated": "更新时间",
+    "retries": "重试次数"
+  },
+  "errors": {
+    "fallback": {
+      "localLogin": "本地账号登录失败。",
+      "oauthStart": "无法开始 PeeringDB 登录。",
+      "oauthCallback": "无法完成 PeeringDB 登录。",
+      "onboardingContext": "无法加载入网申请信息。",
+      "onboardingCreate": "无法创建申请。",
+      "requestsList": "无法加载申请列表。",
+      "requestDetail": "无法加载申请详情。",
+      "adminQueue": "无法加载管理员队列。",
+      "adminDetail": "无法加载管理员详情。",
+      "adminAction": "无法完成管理员操作。",
+      "sessionCheck": "无法验证当前会话。"
+    },
+    "api": {
+      "network_error": "网络连接失败，请检查后重试。",
+      "invalid_response": "服务返回了无效响应。",
+      "request_failed": "请求未能完成。",
+      "duplicate_active_request": "已存在相同的进行中申请。",
+      "invalid_credentials": "用户名或密码错误。",
+      "credential_disabled": "账号已禁用，请联系支持。",
+      "local_auth_disabled": "本地登录已禁用。",
+      "invalid_state": "登录状态无效，请重新登录。",
+      "expired_state": "登录状态已过期，请重新登录。",
+      "invalid_nonce": "安全校验失败，请重新登录。",
+      "upstream_auth_failure": "PeeringDB 认证失败，请重试。",
+      "validation_error": "输入数据无效，请检查后重试。",
+      "not_found": "未找到请求的内容。",
+      "forbidden": "你没有执行此操作的权限。",
+      "conflict": "请求与当前状态冲突。",
+      "unauthorized": "请重新登录后继续。"
+    }
+  },
+  "nav": {
+    "home": "首页",
+    "login": "登录",
+    "onboarding": "入网申请",
+    "dashboard": "状态面板",
+    "adminQueue": "管理员队列"
+  },
+  "shell": {
+    "logoAlt": "{{name}} 标志",
+    "brandSummary": "统一管理网络接入申请并查看实时状态。",
+    "primaryNavigation": "主导航",
+    "menu": "菜单",
+    "path": "路径：{{path}}",
+    "sessionUser": "@{{username}}",
+    "logout": "退出登录",
+    "logoutBusy": "正在退出...",
+    "support": "支持",
+    "github": "GitHub"
+  },
+  "session": {
+    "caption": "会话",
+    "loadingTitle": "加载中",
+    "loadingRoute": "正在验证会话后打开此页面。",
+    "errorTitle": "无法验证会话",
+    "retry": "重试会话检查",
+    "states": {
+      "loading": "加载中",
+      "unauthenticated": "未登录",
+      "error": "会话错误"
+    }
+  },
+  "home": {
+    "caption": "欢迎",
+    "loading": "正在加载会话状态。",
+    "openLogin": "打开登录",
+    "unauthenticatedMessage": "登录后可提交互联申请并跟踪状态。",
+    "signedInTitle": "已登录",
+    "signedInMessage": "当前用户：{{username}}。你可以继续提交申请或查看状态。",
+    "goToOnboarding": "打开入网申请",
+    "goToDashboard": "打开状态面板",
+    "goToAdminQueue": "打开管理员队列"
+  },
+  "login": {
+    "caption": "登录",
+    "title": "登录",
+    "checkingSession": "正在检查已有会话。",
+    "alreadySignedInTitle": "你已登录",
+    "alreadySignedInMessage": "你当前已使用 {{username}} 登录。",
+    "goToDashboard": "前往状态面板",
+    "lead": "请选择登录方式。错误信息会直接显示在当前页面。",
+    "oauth": {
+      "title": "PeeringDB 登录",
+      "description": "使用 PeeringDB 账号授权后返回本应用。",
+      "cta": "使用 PeeringDB 继续",
+      "busy": "正在跳转..."
+    },
+    "local": {
+      "title": "本地账号",
+      "username": "用户名",
+      "password": "密码",
+      "cta": "登录",
+      "busy": "登录中..."
+    }
+  },
+  "authCallback": {
+    "caption": "登录",
+    "title": "PeeringDB 回调",
+    "backToLogin": "返回登录",
+    "detailCode": "详情代码：{{code}}",
+    "messages": {
+      "processing": "正在处理 PeeringDB 回调。",
+      "missingParameters": "缺少回调参数，请重新登录。",
+      "success": "登录成功，正在跳转到入网申请。"
+    }
+  },
+  "onboarding": {
+    "caption": "入网申请",
+    "title": "申请网络接入",
+    "loading": "正在加载可用 ASN 和网络数据。",
+    "lead": "提交 ASN 与目标网络信息以发起接入申请。",
+    "openExistingRequest": "打开已有申请",
+    "restrictions": "网络限制已启用：{{networks}}",
+    "validation": {
+      "invalidAsn": "请输入有效的 ASN。"
+    },
+    "emptyContext": {
+      "title": "申请信息不可用",
+      "description": "当前账户无法加载入网申请信息。"
+    },
+    "noEligibleAsn": {
+      "title": "无可用 ASN",
+      "description": "当前账户没有可用 ASN，请联系支持开通。",
+      "openDashboard": "打开状态面板"
+    },
+    "form": {
+      "asn": "ASN",
+      "network": "目标 ZeroTier 网络",
+      "nodeId": "节点 ID（你的 ZeroTier 客户端）",
+      "nodeIdPlaceholder": "abcde12345",
+      "notes": "备注（可选）",
+      "notesPlaceholder": "补充信息，帮助审核",
+      "submit": "提交申请",
+      "submitting": "提交中...",
+      "goToDashboard": "前往状态面板"
+    }
+  },
+  "dashboard": {
+    "caption": "运营方",
+    "title": "申请状态",
+    "loading": "正在加载你的申请。",
+    "polling": "每 {{seconds}} 秒更新一次。上次刷新：{{refreshedAt}}",
+    "empty": {
+      "title": "暂无申请",
+      "description": "先创建一个申请开始开通流程。",
+      "start": "开始入网申请"
+    },
+    "table": {
+      "caption": "运营方申请列表",
+      "request": "申请",
+      "asn": "ASN",
+      "network": "网络",
+      "status": "状态",
+      "assignedIpv6": "分配的 IPv6",
+      "updated": "更新时间",
+      "action": "操作",
+      "viewDetails": "查看详情"
+    }
+  },
+  "requestDetail": {
+    "caption": "运营方",
+    "title": "申请详情",
+    "loading": "正在加载申请详情。",
+    "header": "申请 ID {{requestId}} | 上次刷新 {{refreshedAt}}",
+    "failed": "开通失败：{{error}}",
+    "rejected": "已拒绝：{{reason}}",
+    "backToDashboard": "返回状态面板",
+    "empty": {
+      "title": "未找到申请",
+      "description": "该申请不存在或你没有权限查看。",
+      "backToDashboard": "返回状态面板"
+    },
+    "membership": {
+      "title": "成员信息",
+      "memberId": "成员 ID",
+      "node": "节点",
+      "authorized": "已授权",
+      "assignedIps": "分配的 IP",
+      "empty": {
+        "title": "暂无成员记录",
+        "description": "开通成功后会显示成员信息。"
+      }
+    }
+  },
+  "adminQueue": {
+    "caption": "管理员",
+    "title": "申请队列",
+    "loading": "正在加载管理员队列。",
+    "polling": "每 {{seconds}} 秒更新一次。上次刷新：{{refreshedAt}}",
+    "filters": {
+      "status": "状态",
+      "all": "全部",
+      "asn": "ASN",
+      "asnPlaceholder": "64512",
+      "network": "ZeroTier 网络",
+      "networkPlaceholder": "abcdef0123456789",
+      "minAge": "最小等待时间（分钟）",
+      "minAgePlaceholder": "30",
+      "apply": "应用筛选",
+      "clear": "清除"
+    },
+    "empty": {
+      "title": "未找到申请",
+      "description": "当前筛选条件下没有结果。",
+      "reset": "重置筛选"
+    },
+    "table": {
+      "caption": "管理员申请队列",
+      "request": "申请",
+      "asn": "ASN",
+      "network": "网络",
+      "status": "状态",
+      "user": "用户",
+      "assignedIpv6": "分配的 IPv6",
+      "updated": "更新时间",
+      "action": "操作",
+      "review": "审核"
+    }
+  },
+  "adminReview": {
+    "caption": "管理员",
+    "title": "申请审核",
+    "loading": "正在加载申请详情。",
+    "header": "正在审核 {{requestId}}",
+    "backToQueue": "返回管理员队列",
+    "validation": {
+      "rejectReasonRequired": "拒绝原因不能为空。"
+    },
+    "labels": {
+      "submitted": "提交时间",
+      "updated": "最后更新时间",
+      "retryCount": "重试次数",
+      "lastError": "最后错误",
+      "noError": "暂无错误"
+    },
+    "actions": {
+      "title": "操作",
+      "approve": "批准",
+      "retry": "重试",
+      "reject": "拒绝",
+      "rejectReason": "拒绝原因",
+      "rejectPlaceholder": "说明拒绝原因",
+      "approveSuccess": "申请已批准并加入开通队列。",
+      "retrySuccess": "已从失败状态加入重试队列。",
+      "rejectSuccess": "申请已拒绝。"
+    },
+    "audit": {
+      "title": "审计事件",
+      "caption": "申请审计事件",
+      "empty": {
+        "title": "暂无审计事件",
+        "description": "该申请当前没有审计记录。"
+      },
+      "table": {
+        "time": "时间",
+        "action": "动作",
+        "actor": "执行者",
+        "metadata": "元数据"
+      }
+    },
+    "empty": {
+      "title": "申请不可用",
+      "description": "未找到该申请。",
+      "backToQueue": "返回管理员队列"
+    }
+  },
+  "notFound": {
+    "caption": "路由",
+    "title": "页面不存在",
+    "empty": {
+      "title": "未知路径",
+      "description": "该路径不在当前应用路由中。",
+      "backHome": "返回首页"
+    }
+  },
+  "forbidden": {
+    "caption": "访问",
+    "title": "需要管理员权限",
+    "message": "当前会话没有该页面所需的管理员权限。",
+    "openDashboard": "打开状态面板"
+  }
+}
