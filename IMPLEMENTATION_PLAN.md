@@ -327,6 +327,7 @@ Steps:
   - emit explicit audit metadata for auto-approved decisions.
 - [x] Step 9.6: Add/adjust automated tests for JSON auth callbacks, onboarding context, admin list/detail APIs, and approval-mode behavior.
 - [x] Step 9.7: Remove legacy redirect-style auth routes and compatibility behavior and clean up FastAPI-related modules.
+- [x] Step 9.8: Load `AppSettings` runtime values from `runtime-config.yaml` instead of environment-variable lookups in `app/config.py`.
 
 Exit criteria:
 - [x] SPA-required auth/workflow/admin APIs exist and are test-covered.
@@ -338,6 +339,7 @@ Verification:
 - [x] `pytest tests/auth_local -q`
 - [x] `pytest tests/workflow -q`
 - [x] Approval-mode tests cover `manual_admin` and `policy_auto` outcomes.
+- [x] `pytest tests/test_config.py -q`
 
 ## 12. Phase 10: SPA Platform and Delivery Topology
 Implements: PRD SPA runtime scope and frontend stack requirements.

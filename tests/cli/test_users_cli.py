@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 from collections.abc import Callable, Generator
 from contextlib import AbstractContextManager
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -31,11 +32,8 @@ def clear_settings_cache() -> Generator[None]:
 def test_cli_create_provisions_local_user_and_assignments(
     session_factory: sessionmaker[Session],
     session_scope_factory: Callable[[], AbstractContextManager[Session]],
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setenv("LOCAL_AUTH_PASSWORD_MIN_LENGTH", "12")
-    monkeypatch.setenv("LOCAL_AUTH_PBKDF2_ITERATIONS", "100000")
     _seed_network(session_factory, "abcdef0123456789")
 
     exit_code = users_cli.main(
@@ -128,8 +126,13 @@ def test_cli_create_enforces_password_policy(
     session_scope_factory: Callable[[], AbstractContextManager[Session]],
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
 ) -> None:
-    monkeypatch.setenv("LOCAL_AUTH_PASSWORD_MIN_LENGTH", "16")
+    _write_runtime_config(
+        tmp_path,
+        "auth:\n  local_auth:\n    password_min_length: 16\n",
+    )
+    monkeypatch.chdir(tmp_path)
 
     exit_code = users_cli.main(
         [
@@ -185,3 +188,9 @@ def _seed_network(session_factory: sessionmaker[Session], network_id: str) -> No
     with session_factory() as session:
         session.add(ZtNetwork(id=network_id, name="Network", is_active=True))
         session.commit()
+
+
+def _write_runtime_config(tmp_path: Path, content: str) -> Path:
+    runtime_config = tmp_path / "runtime-config.yaml"
+    runtime_config.write_text(content, encoding="utf-8")
+    return runtime_config

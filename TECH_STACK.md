@@ -40,6 +40,7 @@ Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`
 ## 7. Security and Config
 1. python-dotenv 1.0.1
 2. cryptography 44.0.0
+3. PyYAML 6.0.2
 
 ## 8. Testing and Quality
 1. pytest 8.3.4

@@ -7,60 +7,105 @@ import pytest
 from app.config import AppSettings
 
 
-def test_from_env_injects_openid_scope_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PEERINGDB_SCOPES", "profile email networks")
+def _write_runtime_config(tmp_path: Path, content: str) -> Path:
+    runtime_config = tmp_path / "runtime-config.yaml"
+    runtime_config.write_text(content, encoding="utf-8")
+    return runtime_config
 
-    settings = AppSettings.from_env()
+
+def test_from_yaml_injects_openid_scope_when_missing(tmp_path: Path) -> None:
+    runtime_config = _write_runtime_config(
+        tmp_path,
+        """
+peeringdb:
+  scopes:
+    - profile
+    - email
+    - networks
+""",
+    )
+
+    settings = AppSettings.from_yaml(str(runtime_config))
 
     assert settings.peeringdb_scopes == ("openid", "profile", "email", "networks")
     assert settings.peeringdb_scope_param == "openid profile email networks"
 
 
-def test_from_env_deduplicates_scopes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PEERINGDB_SCOPES", "openid profile email openid networks profile")
+def test_from_yaml_deduplicates_scopes(tmp_path: Path) -> None:
+    runtime_config = _write_runtime_config(
+        tmp_path,
+        """
+peeringdb:
+  scopes: [openid, profile, email, openid, networks, profile]
+""",
+    )
 
-    settings = AppSettings.from_env()
+    settings = AppSettings.from_yaml(str(runtime_config))
 
     assert settings.peeringdb_scopes == ("openid", "profile", "email", "networks")
 
 
-def test_from_env_reads_local_auth_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LOCAL_AUTH_ENABLED", "false")
-    monkeypatch.setenv("LOCAL_AUTH_PASSWORD_MIN_LENGTH", "14")
-    monkeypatch.setenv("LOCAL_AUTH_PBKDF2_ITERATIONS", "420000")
+def test_from_yaml_reads_local_auth_settings(tmp_path: Path) -> None:
+    runtime_config = _write_runtime_config(
+        tmp_path,
+        """
+auth:
+  local_auth:
+    enabled: false
+    password_min_length: 14
+    pbkdf2_iterations: 420000
+""",
+    )
 
-    settings = AppSettings.from_env()
+    settings = AppSettings.from_yaml(str(runtime_config))
 
     assert settings.local_auth_enabled is False
     assert settings.local_auth_password_min_length == 14
     assert settings.local_auth_pbkdf2_iterations == 420000
 
 
-def test_from_env_clamps_local_auth_bounds(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LOCAL_AUTH_PASSWORD_MIN_LENGTH", "2")
-    monkeypatch.setenv("LOCAL_AUTH_PBKDF2_ITERATIONS", "10")
+def test_from_yaml_clamps_local_auth_bounds(tmp_path: Path) -> None:
+    runtime_config = _write_runtime_config(
+        tmp_path,
+        """
+auth:
+  local_auth:
+    password_min_length: 2
+    pbkdf2_iterations: 10
+""",
+    )
 
-    settings = AppSettings.from_env()
+    settings = AppSettings.from_yaml(str(runtime_config))
 
     assert settings.local_auth_password_min_length == 8
     assert settings.local_auth_pbkdf2_iterations == 100000
 
 
-def test_from_env_reads_provisioning_provider_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("REDIS_URL", "redis://example:6379/9")
-    monkeypatch.setenv("ZT_PROVIDER", "self_hosted_controller")
-    monkeypatch.setenv("ZT_CENTRAL_BASE_URL", "https://central.example/api")
-    monkeypatch.setenv("ZT_CENTRAL_API_TOKEN", "central-secret")
-    monkeypatch.setenv("ZT_CONTROLLER_BASE_URL", "http://controller.example:9993/controller")
-    monkeypatch.setenv("ZT_CONTROLLER_AUTH_TOKEN", "controller-secret")
-    monkeypatch.setenv("ZT_CONTROLLER_AUTH_TOKEN_FILE", "/run/secrets/zt_controller_token")
-    monkeypatch.setenv("ZT_CONTROLLER_REQUIRED_NETWORK_IDS", "abcdef0123456789,0123456789abcdef")
-    monkeypatch.setenv("ZT_CONTROLLER_READINESS_STRICT", "true")
-    monkeypatch.setenv("ZT_CONTROLLER_BACKUP_DIR", "/var/backups/zt-ix-controller")
-    monkeypatch.setenv("ZT_CONTROLLER_BACKUP_RETENTION_COUNT", "21")
-    monkeypatch.setenv("ZT_CONTROLLER_STATE_DIR", "/var/lib/zerotier-one")
+def test_from_yaml_reads_provisioning_provider_settings(tmp_path: Path) -> None:
+    runtime_config = _write_runtime_config(
+        tmp_path,
+        """
+redis:
+  url: redis://example:6379/9
+zerotier:
+  provider: self_hosted_controller
+  central:
+    base_url: https://central.example/api
+    api_token: central-secret
+  self_hosted_controller:
+    base_url: http://controller.example:9993/controller
+    auth_token: controller-secret
+    auth_token_file: /run/secrets/zt_controller_token
+    lifecycle:
+      required_network_ids: [abcdef0123456789, 0123456789abcdef]
+      readiness_strict: true
+      backup_dir: /var/backups/zt-ix-controller
+      backup_retention_count: 21
+      state_dir: /var/lib/zerotier-one
+""",
+    )
 
-    settings = AppSettings.from_env()
+    settings = AppSettings.from_yaml(str(runtime_config))
 
     assert settings.redis_url == "redis://example:6379/9"
     assert settings.zt_provider == "self_hosted_controller"
@@ -79,39 +124,44 @@ def test_from_env_reads_provisioning_provider_settings(monkeypatch: pytest.Monke
     assert settings.zt_controller_state_dir == "/var/lib/zerotier-one"
 
 
-def test_from_env_reads_workflow_approval_mode_from_runtime_config(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    runtime_config = tmp_path / "runtime-config.yaml"
-    runtime_config.write_text("workflow:\n  approval_mode: policy_auto\n")
-    monkeypatch.setenv("ZTIX_RUNTIME_CONFIG_PATH", str(runtime_config))
+def test_from_yaml_reads_workflow_approval_mode_from_runtime_config(tmp_path: Path) -> None:
+    runtime_config = _write_runtime_config(
+        tmp_path,
+        "workflow:\n  approval_mode: policy_auto\n",
+    )
 
-    settings = AppSettings.from_env()
+    settings = AppSettings.from_yaml(str(runtime_config))
 
     assert settings.runtime_config_path == str(runtime_config)
     assert settings.workflow_approval_mode == "policy_auto"
 
 
-def test_from_env_defaults_workflow_approval_mode_when_runtime_config_missing(
-    monkeypatch: pytest.MonkeyPatch,
+def test_from_yaml_defaults_workflow_approval_mode_when_runtime_config_missing(
     tmp_path: Path,
 ) -> None:
     runtime_config = tmp_path / "missing-runtime-config.yaml"
-    monkeypatch.setenv("ZTIX_RUNTIME_CONFIG_PATH", str(runtime_config))
 
-    settings = AppSettings.from_env()
+    settings = AppSettings.from_yaml(str(runtime_config))
 
     assert settings.workflow_approval_mode == "manual_admin"
 
 
-def test_from_env_rejects_invalid_workflow_approval_mode(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    runtime_config = tmp_path / "runtime-config.yaml"
-    runtime_config.write_text("workflow:\n  approval_mode: maybe_later\n")
-    monkeypatch.setenv("ZTIX_RUNTIME_CONFIG_PATH", str(runtime_config))
+def test_from_yaml_rejects_invalid_workflow_approval_mode(tmp_path: Path) -> None:
+    runtime_config = _write_runtime_config(
+        tmp_path,
+        "workflow:\n  approval_mode: maybe_later\n",
+    )
 
     with pytest.raises(ValueError, match="workflow.approval_mode"):
-        AppSettings.from_env()
+        AppSettings.from_yaml(str(runtime_config))
+
+
+def test_from_env_alias_uses_yaml_path(tmp_path: Path) -> None:
+    runtime_config = _write_runtime_config(
+        tmp_path,
+        "workflow:\n  approval_mode: policy_auto\n",
+    )
+
+    settings = AppSettings.from_env(str(runtime_config))
+
+    assert settings.workflow_approval_mode == "policy_auto"

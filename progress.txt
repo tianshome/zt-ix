@@ -1479,3 +1479,61 @@ Next
 
 Known bugs / regressions
 1. No regressions identified in compose configuration rendering for this change.
+
+---
+
+Update: 2026-02-12 (YAML-backed app config loading)
+
+Completed
+1. Reworked `app/config.py` so `AppSettings` loads runtime values from `runtime-config.yaml` (YAML) instead of `os.getenv` lookups.
+2. Kept existing defaults/clamps for session, auth, provisioning, and route-server settings when YAML keys are missing.
+3. Added a lightweight YAML parser path in config loading and preserved `AppSettings.from_env(...)` as a compatibility alias to YAML loading.
+4. Updated `tests/test_config.py` to validate YAML-driven behavior (scopes normalization, local auth bounds, provider settings, approval mode parsing).
+5. Updated `IMPLEMENTATION_PLAN.md` Phase 9 checklist with completed Step 9.8 and verification entry.
+
+Verification
+1. `uv run ruff check app/config.py tests/test_config.py` passed.
+2. `uv run pytest tests/test_config.py -q` passed.
+
+In progress
+1. No active tasks in this update.
+
+Next
+1. If needed, update deployment docs to show where secret values should live now that app settings are YAML-sourced.
+2. Run full test suite to ensure no downstream runtime assumptions still depend on env-driven config.
+
+Known bugs / regressions
+1. None identified from targeted config tests.
+
+Update addendum: 2026-02-12 (YAML config follow-up test alignment)
+
+Completed
+1. Updated `tests/cli/test_users_cli.py` to source password-policy test inputs from a temporary `runtime-config.yaml` instead of environment variables.
+
+Verification
+1. `uv run ruff check app/config.py tests/test_config.py tests/cli/test_users_cli.py` passed.
+2. `uv run pytest tests/test_config.py tests/cli/test_users_cli.py -q` passed.
+
+Update addendum: 2026-02-12 (Config loader switched to PyYAML)
+
+Completed
+1. Replaced custom YAML parsing in `app/config.py` with `PyYAML` (`yaml.safe_load`) for runtime config loading.
+2. Kept existing defaults, clamping, and compatibility alias (`AppSettings.from_env` -> `from_yaml`).
+3. Added pinned dependency `pyyaml==6.0.2` in `pyproject.toml` and documented `PyYAML 6.0.2` in `TECH_STACK.md`.
+4. Synced environment to update lock/install set.
+
+Verification
+1. `uv sync --dev` passed.
+2. `uv run ruff check app/config.py tests/test_config.py tests/cli/test_users_cli.py` passed.
+3. `uv run pytest tests/test_config.py tests/cli/test_users_cli.py -q` passed.
+
+Update addendum: 2026-02-12 (Config reader helper simplification)
+
+Completed
+1. Removed `_get_*` config accessor methods from `app/config.py`.
+2. Refactored `AppSettings.from_yaml` to read typed values directly from parsed YAML dictionaries, assuming correct YAML data types.
+3. Kept existing default fallbacks, approval-mode validation, and normalization of PeeringDB scopes.
+
+Verification
+1. `uv run ruff check app/config.py tests/test_config.py tests/cli/test_users_cli.py` passed.
+2. `uv run pytest tests/test_config.py tests/cli/test_users_cli.py -q` passed.
