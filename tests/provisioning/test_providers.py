@@ -181,6 +181,40 @@ def test_authorize_member_falls_back_to_put_when_post_not_allowed(provider: str)
 
 
 @pytest.mark.parametrize("provider", ["central", "self_hosted_controller"])
+def test_authorize_member_uses_explicit_ip_assignments_when_provided(provider: str) -> None:
+    explicit_ip = "2001:db8:100:0:6:4512:0:1/128"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.read().decode("utf-8") == (
+            '{"authorized":true,"noAutoAssignIps":true,'
+            '"ipAssignments":["2001:db8:100:0:6:4512:0:1/128"]}'
+        )
+        return httpx.Response(
+            status_code=200,
+            json={
+                "id": "member-ipv6",
+                "authorized": True,
+                "config": {"ipAssignments": [explicit_ip]},
+            },
+        )
+
+    adapter = _provider(
+        provider,
+        http_client_factory=_mock_client_factory(handler),
+    )
+    result = adapter.authorize_member(
+        zt_network_id="abcdef0123456789",
+        node_id="abcde12345",
+        asn=64512,
+        request_id=uuid.uuid4(),
+        explicit_ip_assignments=[explicit_ip],
+    )
+
+    assert result.assigned_ips == [explicit_ip]
+
+
+@pytest.mark.parametrize("provider", ["central", "self_hosted_controller"])
 def test_authorize_member_maps_auth_errors(provider: str) -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(status_code=401, json={"error": "unauthorized"})

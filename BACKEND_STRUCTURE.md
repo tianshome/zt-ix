@@ -1,5 +1,5 @@
 # Backend Structure
-Version: 0.8
+Version: 0.9
 Date: 2026-02-12
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `IMPLEMENTATION_PLAN.md`
@@ -226,7 +226,7 @@ CREATE INDEX idx_user_network_access_user_id ON user_network_access(user_id);
    - `central`: ZeroTier Central API (`Authorization: token <token>`) (compatibility-only)
 3. Minimum provider interface methods:
    - `validate_network(zt_network_id) -> bool`
-   - `authorize_member(zt_network_id, node_id, asn, request_id) -> ProvisionResult`
+   - `authorize_member(zt_network_id, node_id, asn, request_id, explicit_ip_assignments?) -> ProvisionResult`
 4. `ProvisionResult` normalized fields:
    - `member_id: str`
    - `is_authorized: bool`
@@ -250,6 +250,8 @@ CREATE INDEX idx_user_network_access_user_id ON user_network_access(user_id);
    - backup and restore validation actions.
 6. Provisioning must remain blocked while lifecycle preflight is unhealthy.
 7. Release readiness requires self-hosted-only operation without Central credentials.
+8. For deterministic IPv6 mode, member updates use explicit `ipAssignments` with `noAutoAssignIps=true`.
+9. Required network config reconciliation must ensure each configured `/64` is present in managed routes and `v4AssignMode.zt=false`.
 
 ## 5.3 Route Server Option A Contract (Sub-phase 5B)
 1. After successful member authorization, worker renders deterministic BIRD peer config from:

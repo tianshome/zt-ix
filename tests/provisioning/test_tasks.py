@@ -68,6 +68,7 @@ def test_process_join_request_provisioning_resolves_provider_from_settings(
             node_id: str,
             asn: int,
             request_id: uuid.UUID,
+            explicit_ip_assignments: list[str] | None = None,
         ) -> Any:
             raise AssertionError(
                 f"unexpected authorize_member call for {zt_network_id} {node_id} {asn} {request_id}"

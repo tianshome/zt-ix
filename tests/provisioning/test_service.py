@@ -52,7 +52,9 @@ class StubProvider:
     )
     authorize_error: Exception | None = None
     validate_calls: list[str] = field(default_factory=list)
-    authorize_calls: list[tuple[str, str, int, uuid.UUID]] = field(default_factory=list)
+    authorize_calls: list[tuple[str, str, int, uuid.UUID, list[str] | None]] = field(
+        default_factory=list
+    )
 
     def validate_network(self, zt_network_id: str) -> bool:
         self.validate_calls.append(zt_network_id)
@@ -65,8 +67,11 @@ class StubProvider:
         node_id: str,
         asn: int,
         request_id: uuid.UUID,
+        explicit_ip_assignments: list[str] | None = None,
     ) -> ProvisionResult:
-        self.authorize_calls.append((zt_network_id, node_id, asn, request_id))
+        self.authorize_calls.append(
+            (zt_network_id, node_id, asn, request_id, explicit_ip_assignments)
+        )
         if self.authorize_error is not None:
             raise self.authorize_error
         return self.authorize_result
@@ -438,6 +443,15 @@ def test_self_hosted_allocation_persists_and_overrides_provider_assigned_ips(
     ).scalar_one()
     assert membership.assigned_ips == [assignment.assigned_ip]
     assert membership.assigned_ips != ["10.0.0.1/32"]
+    assert provider.authorize_calls == [
+        (
+            request_row.zt_network_id,
+            "abcde12345",
+            request_row.asn,
+            request_row.id,
+            [assignment.assigned_ip],
+        )
+    ]
 
 
 def test_self_hosted_allocation_is_stable_across_failed_retry(
@@ -516,6 +530,7 @@ def test_self_hosted_allocation_is_stable_across_failed_retry(
         select(ZtMembership).where(ZtMembership.join_request_id == request_row.id)
     ).scalar_one()
     assert membership.assigned_ips == [first_assigned_ip]
+    assert provider.authorize_calls[-1][4] == [first_assigned_ip]
 
 
 def test_existing_membership_row_is_upserted_without_duplication(db_session: Session) -> None:

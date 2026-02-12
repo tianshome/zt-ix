@@ -51,8 +51,11 @@ class ZeroTierCentralProvider:
         node_id: str,
         asn: int,
         request_id: uuid.UUID,
+        explicit_ip_assignments: list[str] | None = None,
     ) -> ProvisionResult:
-        payload = {"authorized": True}
+        payload = _build_member_authorization_payload(
+            explicit_ip_assignments=explicit_ip_assignments,
+        )
         response = self._request(
             "POST",
             f"/network/{zt_network_id}/member/{node_id}",
@@ -121,6 +124,17 @@ class ZeroTierCentralProvider:
         if response_text:
             detail = f"{detail}; body={response_text[:240]}"
         raise ProviderRequestError(detail, status_code=status_code)
+
+
+def _build_member_authorization_payload(
+    *,
+    explicit_ip_assignments: list[str] | None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"authorized": True}
+    if explicit_ip_assignments:
+        payload["noAutoAssignIps"] = True
+        payload["ipAssignments"] = explicit_ip_assignments
+    return payload
 
 
 def _parse_json_object(response: httpx.Response) -> dict[str, Any]:

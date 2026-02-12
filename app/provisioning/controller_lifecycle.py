@@ -100,6 +100,8 @@ class ControllerRequiredNetworkDerivationResult:
 class ControllerNetworkReconcileResult:
     existing_network_ids: tuple[str, ...]
     created_network_ids: tuple[str, ...]
+    config_updated_network_ids: tuple[str, ...] = ()
+    configured_ipv6_prefixes_by_network_id: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -315,13 +317,17 @@ class SelfHostedControllerLifecycleManager:
         self,
         *,
         required_network_ids: tuple[str, ...],
+        required_network_ipv6_prefixes: tuple[tuple[str, str], ...] = (),
     ) -> ControllerNetworkReconcileResult:
         reconcile_remediation = (
             "verify controller network API access and configured "
             "required network suffixes/full IDs"
         )
+        prefixes_by_network_id = dict(required_network_ipv6_prefixes)
         existing: list[str] = []
         created: list[str] = []
+        config_updated: list[str] = []
+        configured_prefixes: list[tuple[str, str]] = []
         for network_id in required_network_ids:
             self._validate_network_id(network_id)
             lookup_response = self._request(
@@ -334,20 +340,80 @@ class SelfHostedControllerLifecycleManager:
             if lookup_response.status_code == 404:
                 self._create_required_network(network_id)
                 created.append(network_id)
-                continue
+                lookup_response = self._request(
+                    base_url=self._controller_base_url,
+                    method="GET",
+                    path=f"/network/{network_id}",
+                    error_cls=ControllerNetworkReconciliationError,
+                    remediation=reconcile_remediation,
+                )
+                self._raise_for_status(
+                    lookup_response,
+                    error_cls=ControllerNetworkReconciliationError,
+                    default_message=(
+                        "failed to load newly created required controller network "
+                        f"{network_id}"
+                    ),
+                    remediation=reconcile_remediation,
+                )
+            else:
+                self._raise_for_status(
+                    lookup_response,
+                    error_cls=ControllerNetworkReconciliationError,
+                    default_message=f"failed to validate required controller network {network_id}",
+                    remediation=reconcile_remediation,
+                )
+                existing.append(network_id)
 
-            self._raise_for_status(
-                lookup_response,
+            network_payload = _parse_json_object(
                 error_cls=ControllerNetworkReconciliationError,
-                default_message=f"failed to validate required controller network {network_id}",
+                response=lookup_response,
+                message_prefix=(
+                    "controller network reconciliation probe returned invalid JSON payload "
+                    f"for {network_id}"
+                ),
                 remediation=reconcile_remediation,
             )
-            existing.append(network_id)
+            ipv6_prefix = prefixes_by_network_id.get(network_id)
+            if ipv6_prefix is not None:
+                configured_prefixes.append((network_id, ipv6_prefix))
+                if self._reconcile_network_config(
+                    network_id=network_id,
+                    network_payload=network_payload,
+                    ipv6_prefix=ipv6_prefix,
+                    remediation=reconcile_remediation,
+                ):
+                    config_updated.append(network_id)
 
         return ControllerNetworkReconcileResult(
             existing_network_ids=tuple(existing),
             created_network_ids=tuple(created),
+            config_updated_network_ids=tuple(config_updated),
+            configured_ipv6_prefixes_by_network_id=tuple(configured_prefixes),
         )
+
+    def _reconcile_network_config(
+        self,
+        *,
+        network_id: str,
+        network_payload: dict[str, Any],
+        ipv6_prefix: str,
+        remediation: str,
+    ) -> bool:
+        desired_config = _build_reconciled_network_config(
+            network_payload=network_payload,
+            ipv6_prefix=ipv6_prefix,
+        )
+        current_config = network_payload.get("config")
+        if isinstance(current_config, dict) and current_config == desired_config:
+            return False
+
+        self._update_network_config(
+            network_id=network_id,
+            network_config=desired_config,
+            remediation=remediation,
+        )
+        return True
 
     def reload_auth_token(self, *, token_file: str | None = None) -> str:
         source = (token_file or self._auth_token_file).strip()
@@ -531,6 +597,50 @@ class SelfHostedControllerLifecycleManager:
             ),
             remediation=(
                 "verify controller API compatibility and network creation permissions "
+                "for this deployment"
+            ),
+        )
+
+    def _update_network_config(
+        self,
+        *,
+        network_id: str,
+        network_config: dict[str, Any],
+        remediation: str,
+    ) -> None:
+        update_attempts: tuple[tuple[str, str, dict[str, Any]], ...] = (
+            ("POST", f"/network/{network_id}", {"config": network_config}),
+            ("PUT", f"/network/{network_id}", {"config": network_config}),
+            ("POST", "/network", {"id": network_id, "config": network_config}),
+        )
+        for method, path, payload in update_attempts:
+            response = self._request(
+                base_url=self._controller_base_url,
+                method=method,
+                path=path,
+                json_body=payload,
+                error_cls=ControllerNetworkReconciliationError,
+                remediation=remediation,
+            )
+            if response.status_code in {404, 405}:
+                continue
+            self._raise_for_status(
+                response,
+                error_cls=ControllerNetworkReconciliationError,
+                default_message=(
+                    f"failed to reconcile required controller network config for {network_id}"
+                ),
+                remediation=remediation,
+            )
+            return
+
+        raise ControllerNetworkReconciliationError(
+            (
+                "controller network config update endpoint was not available for "
+                f"required network {network_id}"
+            ),
+            remediation=(
+                "verify controller API compatibility and network update permissions "
                 "for this deployment"
             ),
         )
@@ -856,7 +966,8 @@ def run_controller_lifecycle_preflight(
 
     try:
         network_reconcile = manager.reconcile_required_networks(
-            required_network_ids=network_derivation.required_network_ids
+            required_network_ids=network_derivation.required_network_ids,
+            required_network_ipv6_prefixes=network_derivation.expanded_suffix_ipv6_prefixes,
         )
         reconciled_network_ids = (
             network_reconcile.existing_network_ids + network_reconcile.created_network_ids
@@ -903,6 +1014,11 @@ def run_controller_lifecycle_preflight(
             "created_network_ids": list(network_reconcile.created_network_ids),
             "existing_count": len(network_reconcile.existing_network_ids),
             "created_count": len(network_reconcile.created_network_ids),
+            "config_updated_network_ids": list(network_reconcile.config_updated_network_ids),
+            "config_updated_count": len(network_reconcile.config_updated_network_ids),
+            "configured_ipv6_prefixes_by_network_id": dict(
+                network_reconcile.configured_ipv6_prefixes_by_network_id
+            ),
         },
     )
     _audit_lifecycle_event(
@@ -1220,6 +1336,58 @@ def _sync_reconciled_network_ids_to_db(
             "failed to synchronize controller network reconciliation result to SQL DB",
             remediation=sync_remediation,
         ) from exc
+
+
+def _build_reconciled_network_config(
+    *,
+    network_payload: dict[str, Any],
+    ipv6_prefix: str,
+) -> dict[str, Any]:
+    raw_config = network_payload.get("config")
+    config = dict(raw_config) if isinstance(raw_config, dict) else {}
+
+    raw_v4_assign_mode = config.get("v4AssignMode")
+    v4_assign_mode = dict(raw_v4_assign_mode) if isinstance(raw_v4_assign_mode, dict) else {}
+    v4_assign_mode["zt"] = False
+    config["v4AssignMode"] = v4_assign_mode
+
+    routes = _normalize_managed_routes(config.get("routes"))
+    if not any(route.get("target") == ipv6_prefix for route in routes):
+        routes.append({"target": ipv6_prefix, "via": None})
+    config["routes"] = routes
+    return config
+
+
+def _normalize_managed_routes(raw_routes: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw_routes, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw_route in raw_routes:
+        if not isinstance(raw_route, dict):
+            continue
+        target = _extract_non_empty_str(raw_route, "target")
+        if target is None:
+            continue
+        via_value = raw_route.get("via")
+        if via_value is None:
+            via = ""
+        elif isinstance(via_value, str):
+            via = via_value.strip()
+        else:
+            continue
+
+        route_key = (target, via)
+        if route_key in seen:
+            continue
+
+        normalized_route = dict(raw_route)
+        normalized_route["target"] = target
+        normalized_route["via"] = via or None
+        normalized.append(normalized_route)
+        seen.add(route_key)
+    return normalized
 
 
 def _error_metadata(exc: ControllerLifecycleError) -> dict[str, Any]:

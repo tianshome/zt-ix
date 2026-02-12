@@ -28,6 +28,7 @@ class ProvisioningProvider(Protocol):
         node_id: str,
         asn: int,
         request_id: uuid.UUID,
+        explicit_ip_assignments: list[str] | None = None,
     ) -> ProvisionResult:
         """Authorize a member and return a normalized provider result."""
 
@@ -52,4 +53,3 @@ class ProviderNetworkNotFoundError(ProvisioningProviderError):
 
 class ProviderRequestError(ProvisioningProviderError):
     error_code = "provider_request_error"
-

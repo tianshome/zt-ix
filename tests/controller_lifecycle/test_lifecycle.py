@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -89,8 +90,10 @@ def test_network_reconciliation_creates_missing_required_network(
     missing = "0123456789abcdef"
     existing = "abcdef0123456789"
     seen: list[tuple[str, str]] = []
+    missing_created = False
 
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal missing_created
         seen.append((request.method, request.url.path))
         if request.url.path == "/status":
             return httpx.Response(status_code=200, json={"status": "online"})
@@ -99,8 +102,11 @@ def test_network_reconciliation_creates_missing_required_network(
         if request.url.path == f"/controller/network/{existing}":
             return httpx.Response(status_code=200, json={"id": existing})
         if request.url.path == f"/controller/network/{missing}" and request.method == "GET":
-            return httpx.Response(status_code=404, json={"error": "missing"})
+            if not missing_created:
+                return httpx.Response(status_code=404, json={"error": "missing"})
+            return httpx.Response(status_code=200, json={"id": missing})
         if request.url.path == f"/controller/network/{missing}" and request.method == "POST":
+            missing_created = True
             return httpx.Response(status_code=200, json={"id": missing})
         raise AssertionError(f"unexpected request {request.method} {request.url.path}")
 
@@ -129,6 +135,7 @@ def test_preflight_syncs_zt_network_rows_to_reconciled_ids(
     stale = "1111111111111111"
     existing = "abcdef0123456789"
     missing = "0123456789abcdef"
+    missing_created = False
     db_session.add_all(
         [
             ZtNetwork(id=stale, name="Stale", is_active=True),
@@ -138,6 +145,7 @@ def test_preflight_syncs_zt_network_rows_to_reconciled_ids(
     db_session.commit()
 
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal missing_created
         if request.url.path == "/status":
             return httpx.Response(status_code=200, json={"status": "online"})
         if request.url.path == "/controller":
@@ -145,8 +153,11 @@ def test_preflight_syncs_zt_network_rows_to_reconciled_ids(
         if request.url.path == f"/controller/network/{existing}":
             return httpx.Response(status_code=200, json={"id": existing})
         if request.url.path == f"/controller/network/{missing}" and request.method == "GET":
-            return httpx.Response(status_code=404, json={"error": "missing"})
+            if not missing_created:
+                return httpx.Response(status_code=404, json={"error": "missing"})
+            return httpx.Response(status_code=200, json={"id": missing})
         if request.url.path == f"/controller/network/{missing}" and request.method == "POST":
+            missing_created = True
             return httpx.Response(status_code=200, json={"id": missing})
         raise AssertionError(f"unexpected request {request.method} {request.url.path}")
 
@@ -363,18 +374,41 @@ def test_suffix_expansion_uses_controller_prefix_for_reconciliation(
     existing = f"{CONTROLLER_ID}{suffix_existing}"
     missing = f"{CONTROLLER_ID}{suffix_missing}"
     seen: list[tuple[str, str]] = []
+    missing_created = False
 
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal missing_created
         seen.append((request.method, request.url.path))
         if request.url.path == "/status":
             return httpx.Response(status_code=200, json={"status": "online"})
         if request.url.path == "/controller":
             return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
         if request.url.path == f"/controller/network/{existing}":
-            return httpx.Response(status_code=200, json={"id": existing})
+            return httpx.Response(
+                status_code=200,
+                json={
+                    "id": existing,
+                    "config": {
+                        "v4AssignMode": {"zt": False},
+                        "routes": [{"target": "2001:db8:100::/64", "via": None}],
+                    },
+                },
+            )
         if request.url.path == f"/controller/network/{missing}" and request.method == "GET":
-            return httpx.Response(status_code=404, json={"error": "missing"})
+            if not missing_created:
+                return httpx.Response(status_code=404, json={"error": "missing"})
+            return httpx.Response(
+                status_code=200,
+                json={
+                    "id": missing,
+                    "config": {
+                        "v4AssignMode": {"zt": False},
+                        "routes": [{"target": "2001:db8:200::/64", "via": None}],
+                    },
+                },
+            )
         if request.url.path == f"/controller/network/{missing}" and request.method == "POST":
+            missing_created = True
             return httpx.Response(status_code=200, json={"id": missing})
         raise AssertionError(f"unexpected request {request.method} {request.url.path}")
 
@@ -409,6 +443,70 @@ def test_suffix_expansion_uses_controller_prefix_for_reconciliation(
     assert derivation_event.event_metadata["controller_prefix"] == CONTROLLER_ID
     assert derivation_event.event_metadata["required_network_ids"] == [existing, missing]
     assert derivation_event.event_metadata["expanded_suffix_network_ids"] == [existing, missing]
+
+
+def test_suffix_reconciliation_enforces_ipv6_routes_and_disables_ipv4_auto_assign(
+    db_session: Session,
+    tmp_path: Path,
+) -> None:
+    suffix = "123456"
+    network_id = f"{CONTROLLER_ID}{suffix}"
+    seen_payloads: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/status":
+            return httpx.Response(status_code=200, json={"status": "online"})
+        if request.url.path == "/controller":
+            return httpx.Response(status_code=200, json={"id": CONTROLLER_ID})
+        if request.url.path == f"/controller/network/{network_id}" and request.method == "GET":
+            return httpx.Response(
+                status_code=200,
+                json={
+                    "id": network_id,
+                    "config": {
+                        "v4AssignMode": {"zt": True, "nwid": False},
+                        "routes": [{"target": "10.1.0.0/16", "via": "10.1.0.1"}],
+                    },
+                },
+            )
+        if request.url.path == f"/controller/network/{network_id}" and request.method == "POST":
+            seen_payloads.append(json.loads(request.read().decode("utf-8")))
+            return httpx.Response(status_code=200, json={"id": network_id})
+        raise AssertionError(f"unexpected request {request.method} {request.url.path}")
+
+    manager = _manager(
+        tmp_path=tmp_path,
+        handler=handler,
+        required_network_ids=(),
+        required_network_suffixes=(suffix,),
+        ipv6_prefixes_by_network_suffix=((suffix, "2001:db8:100::/64"),),
+    )
+    result = run_controller_lifecycle_preflight(
+        manager=manager,
+        db_session=db_session,
+        strict_fail_closed=True,
+        trigger="test_suffix_network_config_reconcile",
+    )
+
+    assert result is not None
+    assert result.network_reconcile.config_updated_network_ids == (network_id,)
+    assert result.network_reconcile.configured_ipv6_prefixes_by_network_id == (
+        (network_id, "2001:db8:100::/64"),
+    )
+    assert len(seen_payloads) == 1
+
+    payload = seen_payloads[0]
+    assert payload["config"]["v4AssignMode"]["zt"] is False
+    routes = payload["config"]["routes"]
+    assert {"target": "10.1.0.0/16", "via": "10.1.0.1"} in routes
+    assert {"target": "2001:db8:100::/64", "via": None} in routes
+
+    network_reconcile_event = db_session.execute(
+        select(AuditEvent)
+        .where(AuditEvent.action == "controller_lifecycle.network_reconciliation.succeeded")
+        .order_by(AuditEvent.created_at.desc())
+    ).scalar_one()
+    assert network_reconcile_event.event_metadata["config_updated_count"] == 1
 
 
 def test_suffix_derivation_rejects_missing_ipv6_prefix_mapping(

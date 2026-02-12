@@ -1,5 +1,5 @@
 # Application Flow
-Version: 0.8
+Version: 0.9
 Date: 2026-02-12
 
 Related docs: `PRD.md`, `BACKEND_STRUCTURE.md`, `FRONTEND_GUIDELINES.md`, `IMPLEMENTATION_PLAN.md`
@@ -170,13 +170,14 @@ Sequence:
 2. Worker resolves provider mode from `ZT_PROVIDER` (release environments require `self_hosted_controller`; `central` is compatibility-only).
 3. For self-hosted mode, worker enforces controller lifecycle readiness gate before provider calls.
 4. For self-hosted mode, worker allocates/reuses deterministic IPv6 assignment from SQL-backed per-network/per-ASN sequence state.
-5. Worker calls provider adapter to authorize membership on target network.
-6. Worker renders deterministic per-ASN route-server BIRD peer snippets using assigned endpoint addresses.
-7. Worker fans out generated snippets over SSH to all configured route servers.
-8. Decision point:
+5. Worker calls provider adapter to authorize membership on target network using explicit IPv6 `ipAssignments` and `noAutoAssignIps=true`.
+6. In self-hosted mode, lifecycle reconciliation ensures each required network config includes the configured IPv6 `/64` managed route and has IPv4 auto-assignment disabled.
+7. Worker renders deterministic per-ASN route-server BIRD peer snippets using assigned endpoint addresses.
+8. Worker fans out generated snippets over SSH to all configured route servers.
+9. Decision point:
    - Success: upsert membership data, set request `active`, emit audit events.
    - Failure: set request `failed`, increment retry metadata, emit audit event with error context.
-9. Operator/admin SPA views observe status via polling APIs.
+10. Operator/admin SPA views observe status via polling APIs.
 
 Failure handling:
 1. Transient provider/API failures may be retried by worker policy.

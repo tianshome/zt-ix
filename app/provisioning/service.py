@@ -164,6 +164,7 @@ def process_join_request_provisioning_with_provider(
             asn=request_row.asn,
             zt_network_id=request_row.zt_network_id,
             node_id=request_row.node_id,
+            explicit_ip_assignments=allocated_assigned_ips,
         )
         assigned_ips = (
             allocated_assigned_ips
@@ -260,6 +261,7 @@ def _authorize_membership(
     asn: int,
     zt_network_id: str,
     node_id: str | None,
+    explicit_ip_assignments: list[str] | None = None,
 ) -> ProvisionResult:
     if node_id is None:
         raise ProvisioningInputError("node_id is required before provisioning can run")
@@ -274,6 +276,7 @@ def _authorize_membership(
         node_id=node_id,
         asn=asn,
         request_id=request_id,
+        explicit_ip_assignments=explicit_ip_assignments,
     )
 
 

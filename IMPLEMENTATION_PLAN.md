@@ -1,5 +1,5 @@
 # Implementation Plan
-Version: 2.3
+Version: 2.4
 Date: 2026-02-12
 
 Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`, `BACKEND_STRUCTURE.md`
@@ -19,11 +19,11 @@ Related docs: `PRD.md`, `APP_FLOW.md`, `TECH_STACK.md`, `FRONTEND_GUIDELINES.md`
 - [x] Configurable approval mode is implemented from runtime config (`manual_admin` / `policy_auto`).
 - [x] Queue placeholder has been replaced with real async dispatch.
 - [ ] SPA frontend integration for onboarding/dashboard/request/admin flows.
-  - Blocked by: Phase 11 Step 11.1 to Step 11.6.
-  - Reason: SPA runtime foundation is complete; core workflow screens are not implemented yet.
+  - Blocked by: Phase 11 Step 11.7.
+  - Reason: assigned IPv6 rendering in request list tables is still open.
 - [x] Route-server integration (Route Server Option A) is complete (Phase 7 Step 7.1 to Step 7.3).
 - [x] Self-hosted controller lifecycle canonical network-ID derivation is complete (Phase 8 Step 8.6).
-- [ ] Phase 8 IPv6 deterministic member assignment extension is partially complete (Step 8.7 to Step 8.9 done; Step 8.10 to Step 8.11 open).
+- [x] Phase 8 IPv6 deterministic member assignment extension is complete (Step 8.7 to Step 8.11).
 - [x] Phase 9 API realignment for SPA and approval-mode config is complete.
 
 ## 1. Planning Assumptions and Open Questions
@@ -306,12 +306,12 @@ Steps:
     - persist assigned IPv6 address in SQL with explicit `join_request_id` association for request-level lookups,
     - guarantee one stable IPv6 assignment per `join_request_id` across retries,
     - ensure concurrent worker runs cannot issue duplicate IPv6 addresses.
-- [ ] Step 8.10: Wire IPv6 assignment into provider + lifecycle reconciliation.
+- [x] Step 8.10: Wire IPv6 assignment into provider + lifecycle reconciliation.
   - Minimum behaviors:
     - include explicit member `ipAssignments` in self-hosted controller authorize/update payloads,
     - enforce `noAutoAssignIps` + manual member assignment behavior,
     - reconcile network config so managed routes include configured `/64` prefixes and IPv4 auto-assignment is disabled.
-- [ ] Step 8.11: Add automated and manual validation coverage for IPv6-only provisioning.
+- [x] Step 8.11: Add automated and manual validation coverage for IPv6-only provisioning.
   - Minimum coverage:
     - runtime-config parsing/validation for per-network `/64` prefixes,
     - allocator sequencing/non-reuse/concurrency behavior,
@@ -345,6 +345,8 @@ Verification:
 - [x] `pytest tests/test_config.py -q`
 - [x] `pytest tests/provisioning/test_ipv6_allocations.py tests/provisioning/test_service.py -q`
 - [x] `pytest tests/controller_lifecycle/test_lifecycle.py -q`
+- [x] `pytest tests/provisioning/test_providers.py -q`
+- [x] `pytest tests/workflow/test_request_workflow_integration.py -q -k assigned_ipv6`
 - [x] `uv run env DATABASE_URL=sqlite:////tmp/zt_ix_ipv6_alloc.db alembic upgrade head && uv run env DATABASE_URL=sqlite:////tmp/zt_ix_ipv6_alloc.db alembic downgrade base && uv run env DATABASE_URL=sqlite:////tmp/zt_ix_ipv6_alloc.db alembic upgrade head`
 - [x] Manual checks:
   - controller container starts healthy with `postgres` and `redis` in the same compose run
@@ -433,8 +435,6 @@ Steps:
     - show assigned IPv6 from API/SQL-backed request association in dashboard/admin request list rows,
     - display deterministic fallback (`unassigned`) when request has no assigned IPv6 yet,
     - keep table behavior within existing MVP shadcn/Radix table patterns.
-  - Blocked by: Phase 8 Step 8.10 to Step 8.11.
-  - Reason: backend provider payload wiring and finalized IPv6-only end-to-end validation must land before UI rendering can be completed and validated.
 
 Blocked items:
 - [ ] Large-scale table optimization (virtualization, advanced sort persistence, server-driven pagination tuning).
@@ -452,16 +452,16 @@ Exit criteria:
 - [x] Status updates are visible via HTTP polling without manual page reloads.
 - [x] Core request/admin actions are available from SPA screens.
 - [ ] Operator/admin request list tables show assigned IPv6 when available.
-  - Blocked by: Phase 8 Step 8.10 to Step 8.11 and Phase 11 Step 11.7.
-  - Reason: UI exposure depends on finalized backend IPv6 provider payload wiring + API surfacing.
+  - Blocked by: Phase 11 Step 11.7.
+  - Reason: request-list table rendering for assigned IPv6 is not implemented yet.
 
 Verification:
 - [x] `npm run build` (inside `frontend/`)
 - [x] Manual SPA walkthrough for auth -> onboarding -> request detail -> admin decision/retry.
 - [x] Manual polling check confirms status transition visibility without full page refresh.
 - [ ] Manual table check confirms operator/admin request list rows display assigned IPv6 values from API.
-  - Blocked by: Phase 8 Step 8.10 to Step 8.11 and interactive browser runtime unavailable in this execution environment.
-  - Reason: finalized backend IPv6 flow and browser interaction are both required for final validation.
+  - Blocked by: Phase 11 Step 11.7 and interactive browser runtime unavailable in this execution environment.
+  - Reason: UI table update and browser interaction are both required for final validation.
 
 ## 14. Phase 12: Frontend MVP Validation and Deferred UX Scope
 Implements: final frontend quality gate for `v0.1.0`.

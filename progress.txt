@@ -1857,3 +1857,52 @@ Next
 
 Known bugs / regressions
 1. No regressions detected in lint, typecheck, migration lifecycle, or automated tests for this scope.
+
+---
+
+Update: 2026-02-12 (Phase 8 Step 8.10 and Step 8.11 implemented: IPv6-only provider payload + lifecycle network-config reconciliation)
+
+Completed
+1. Implemented Phase 8 Step 8.10 provider payload wiring:
+   - Extended provider contract to accept optional explicit member `ipAssignments`.
+   - Updated `self_hosted_controller` and `central` adapters to send `authorized=true` and, when explicit assignments are provided, `noAutoAssignIps=true` + `ipAssignments=[...]`.
+   - Updated provisioning service to pass SQL-allocated deterministic IPv6 addresses into provider authorization calls for self-hosted flow.
+2. Implemented Phase 8 Step 8.10 lifecycle network-config reconciliation:
+   - Extended required-network reconciliation to apply config updates for networks with configured IPv6 prefixes.
+   - Enforced required config behavior per managed network:
+     - `v4AssignMode.zt=false`
+     - required IPv6 `/64` present in network `routes`.
+   - Added reconciliation metadata for updated network IDs and configured IPv6 prefixes.
+3. Implemented Phase 8 Step 8.11 automated validation coverage:
+   - Added provider payload tests asserting explicit IPv6 `ipAssignments` + `noAutoAssignIps` behavior.
+   - Added lifecycle reconciliation tests asserting IPv6 route injection and IPv4 auto-assign disablement.
+   - Added allocator contention/retry test exercising IntegrityError retry path for concurrency contention handling.
+   - Added provisioning-service assertion that deterministic SQL IPv6 assignment is forwarded to provider authorize payload and remains stable across retries/failure-recovery paths.
+4. Updated source-of-truth docs for implemented behavior:
+   - `APP_FLOW.md` now describes explicit IPv6 assignment payload usage and lifecycle config reconciliation in provisioning flow.
+   - `BACKEND_STRUCTURE.md` contract updated for optional `explicit_ip_assignments`, `noAutoAssignIps` behavior, and network-config reconciliation requirements.
+5. Updated implementation tracking:
+   - `IMPLEMENTATION_PLAN.md` Version `2.4`.
+   - Marked Phase 8 Step `8.10` and Step `8.11` complete.
+   - Updated snapshot to reflect Phase 8 IPv6 extension completion.
+   - Removed stale blocker dependency tying Phase 11 Step `11.7` to Phase 8 Step `8.10`/`8.11`; Step `11.7` remains open on frontend implementation only.
+
+Verification
+1. `uv run ruff check .` passed.
+2. `uv run mypy .` passed.
+3. `uv run pytest tests/provisioning/test_providers.py tests/provisioning/test_service.py tests/provisioning/test_tasks.py tests/provisioning/test_ipv6_allocations.py tests/controller_lifecycle/test_lifecycle.py -q` passed.
+4. `uv run pytest tests/provisioning -q tests/controller_lifecycle -q` passed.
+5. `uv run pytest tests/workflow/test_request_workflow_integration.py -q -k assigned_ipv6` passed.
+6. `uv run pytest -q` passed.
+
+In progress
+1. No active implementation task in this update.
+
+Next
+1. Implement Phase 11 Step 11.7 to render assigned IPv6 in operator/admin request list tables (`unassigned` fallback).
+2. Execute browser/manual UI validation for request-list IPv6 rendering once Step 11.7 is complete.
+3. Continue Phase 12 frontend MVP validation tasks.
+
+Known bugs / regressions
+1. No regressions detected in lint/typecheck/automated tests for this scope.
+2. Phase 8 IPv6 manual runtime checks in the implementation plan remain open and require environment-backed manual execution.

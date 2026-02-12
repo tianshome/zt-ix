@@ -15,6 +15,7 @@ from app.provisioning.providers.base import (
     ProvisionResult,
 )
 from app.provisioning.providers.central import (
+    _build_member_authorization_payload,
     _extract_assigned_ips,
     _extract_is_authorized,
     _extract_member_id,
@@ -57,8 +58,11 @@ class ZeroTierSelfHostedControllerProvider:
         node_id: str,
         asn: int,
         request_id: uuid.UUID,
+        explicit_ip_assignments: list[str] | None = None,
     ) -> ProvisionResult:
-        payload = {"authorized": True}
+        payload = _build_member_authorization_payload(
+            explicit_ip_assignments=explicit_ip_assignments,
+        )
         response = self._request(
             "POST",
             f"/network/{zt_network_id}/member/{node_id}",
@@ -127,4 +131,3 @@ class ZeroTierSelfHostedControllerProvider:
         if response_text:
             detail = f"{detail}; body={response_text[:240]}"
         raise ProviderRequestError(detail, status_code=status_code)
-

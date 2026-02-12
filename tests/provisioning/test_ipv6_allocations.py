@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.enums import RequestStatus
@@ -103,6 +105,46 @@ def test_get_or_allocate_for_request_is_monotonic_per_network_asn(
         )
     ).scalar_one()
     assert state.last_sequence == 2
+
+
+def test_get_or_allocate_for_request_retries_after_integrity_contention(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_row = _seed_join_request(
+        db_session,
+        asn=64512,
+        zt_network_id="abcdef0123456789",
+    )
+    repository = ZtIpv6AllocationRepository(db_session)
+    original_flush = db_session.flush
+    flush_count = {"value": 0}
+
+    def flaky_flush(objects: list[Any] | tuple[Any, ...] | None = None) -> None:
+        flush_count["value"] += 1
+        if flush_count["value"] == 2:
+            raise IntegrityError(
+                "simulated concurrent insert conflict",
+                params={},
+                orig=Exception("duplicate assignment"),
+            )
+        original_flush(objects)
+
+    monkeypatch.setattr(db_session, "flush", flaky_flush)
+
+    assignment = repository.get_or_allocate_for_request(
+        join_request_id=request_row.id,
+        zt_network_id=request_row.zt_network_id,
+        asn=request_row.asn,
+        network_prefix="2001:db8:100::/64",
+    )
+
+    assert assignment.sequence == 1
+    assert assignment.assigned_ip.startswith("2001:db8:100:")
+
+    persisted_assignment = repository.get_by_request_id(request_row.id)
+    assert persisted_assignment is not None
+    assert persisted_assignment.id == assignment.id
 
 
 def _seed_join_request(
